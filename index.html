@@ -57,6 +57,7 @@
     box-shadow:inset 0 -2px 0 rgba(0,0,0,.15);
   }
   .board.warn .val{background:#ffb1a6;color:#6d1b12}
+  .board.boost .val{background:#8bf5a8;color:#0d4a23}   /* 时间奖励闪一下 */
   .icon-btn{
     flex:0 0 auto;
     background:linear-gradient(180deg,var(--wood2),var(--wood));
@@ -131,8 +132,9 @@
 
     <div class="overlay" id="overlay-menu">
       <div class="banner">点一下就开钓！</div>
-      <p>点海里任何位置 → 鱼钩往下沉，碰到的第一个东西就自动收线。<br>
-         每个目标头上写着分数：<b>越深的越值钱，但拉上来越慢</b>。<br>
+      <p>点海里任何位置放钩，钩子会一直往下沉，<b>再点一下就在当前深度开始收线</b>。<br>
+         <b style="color:#ffd24a">收线路上碰到的全部串上来</b> —— 挑鱼多的那一竖排下钩！<br>
+         钓到大货 <b style="color:#8bf5a8">加时间</b>（大鱼 +2s，宝箱巨兽 +3s），越大越值钱但拉得越慢。<br>
          浅水是小鱼水母，中层有海龟乌贼，深海才有灯笼鱼、宝箱和
          <b style="color:#ffd24a">1000 分巨兽</b>。</p>
       <div class="price wide" id="menu-price"></div>
@@ -148,7 +150,8 @@
     </div>
   </div>
 
-  <p class="tip">鼠标点击 / 手机点屏 / 空格键 = 放钩　·　连续钓中有连击加成，空钩清零</p>
+  <p class="tip">鼠标点击 / 手机点屏 / 空格键 = 放钩，下沉中再按一次 = 就地收线（不必沉到底）<br>
+    收线途中碰到的全部串上来（最多 8 个，越串越沉）　·　连击加成最高 ×2，空钩清零</p>
 </div>
 
 <script>
@@ -158,7 +161,11 @@
   // ───────────────────────── 场地 ─────────────────────────
   const canvas = document.getElementById("game");
   const ctx    = canvas.getContext("2d");
-  const W = canvas.width, H = canvas.height;    // 600 × 980，竖屏机台
+  const W = canvas.width, H = canvas.height;    // 600 × 980，竖屏机台（逻辑坐标）
+  // 按屏幕像素密度渲染，否则在手机和高分屏上是把 600×980 拉大，线条和数字会发虚
+  const DPR = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width  = W * DPR;
+  canvas.height = H * DPR;
   const SEA_Y   = 210;                          // 水面
   const FLOOR_Y = H - 34;                       // 海底
   const TOP     = SEA_Y + 40;
@@ -198,8 +205,9 @@
   let soundOn = true;
   let caught = {}, earned = {};                 // 条数 / 实得分数（含连击加成）
   let items = [], bubbles = [], pops = [], sparks = [];
-  let hook = { state:"idle", x:W/2, y:SEA_Y, hooked:null, pull:0 };
+  let hook = { state:"idle", x:W/2, y:SEA_Y, catches:[], pull:0 };
   let spawnTimer = 0, chestTimer = 5, bossTimer = 18, waveT = 0, bob = 0;
+  let bonusGiven = 0;                              // 本局已发放的奖励时间
   const ship = { x:W/2, tipX:W/2, tipY:SEA_Y - 60 };
 
   const el = {
@@ -293,8 +301,9 @@
   function resetGame() {
     score = 0; timeLeft = GAME_TIME; combo = 0; caught = {}; earned = {};
     items = []; pops = []; sparks = [];
-    hook = { state:"idle", x:W/2, y:SEA_Y, hooked:null, pull:0 };
+    hook = { state:"idle", x:W/2, y:SEA_Y, catches:[], pull:0 };
     spawnTimer = 0; chestTimer = rand(4, 7); bossTimer = rand(15, 25);
+    bonusGiven = 0;
     for (let i = 0; i < 14; i++) {                     // 开局就有一片鱼群
       spawnRandom();
       const it = items[items.length - 1];
@@ -335,17 +344,48 @@
   }
 
   // ───────────────────────── 放钩 / 收线 ─────────────────────────
+  const MAX_CHAIN = 8;                             // 一趟最多串几个
+  const BONUS_CAP = 25;                            // 每局时间奖励总上限，避免高手无限续命
+  // 钓上大货多给时间：真正的代价是时间，所以大货必须把时间还回来一部分
+  const timeBonus = k => k.score >= 400 ? 3 : k.score >= 150 ? 2 : k.score >= 60 ? 1 : 0;
+
   function cast(x) {
-    if (state !== "playing" || hook.state !== "idle") return;
+    if (state !== "playing") return;
+    if (hook.state === "down") { reel(); return; }  // 下沉途中再点一下 = 立刻收线
+    if (hook.state !== "idle") return;
     hook.x = clamp(x, 20, W - 20);
     hook.y = SEA_Y;
     hook.state = "down";
-    hook.hooked = null;
+    hook.catches = [];
     splash(hook.x, SEA_Y, 9, "#cdeeff");
     beep(760, 0.07, "square", 0.03);
   }
 
+  function reel() {
+    hook.state = "up";
+    hook.pull  = pullSpeed();
+  }
+
+  // 空钩拉得飞快；挂上东西后取最难拉的那个，每多挂一个再慢一档
+  function pullSpeed() {
+    if (!hook.catches.length) return 470;
+    const slowest = Math.min(...hook.catches.map(c => c.kind.pull));
+    return Math.max(45, slowest * Math.pow(0.85, hook.catches.length - 1));
+  }
+
+  // 把串上的东西一个接一个挂在钩子下面
+  function layChain() {
+    let off = 0;
+    for (const it of hook.catches) {
+      off  += it.kind.hh * 0.9;
+      it.x  = hook.x + Math.sin(waveT * 8 + off * 0.05) * 4;
+      it.y  = hook.y + off;
+      off  += it.kind.hh * 0.9;
+    }
+  }
+
   function tryHook() {
+    if (hook.catches.length >= MAX_CHAIN) return false;
     let hit = null, bestD = Infinity;
     for (const it of items) {
       const dx = (hook.x - it.x) / (it.kind.hw + 4), dy = (hook.y - it.y) / (it.kind.hh + 4);
@@ -354,34 +394,60 @@
     }
     if (!hit) return false;
     items.splice(items.indexOf(hit), 1);
-    hook.hooked = hit;
-    hook.state  = "up";
-    hook.pull   = hit.kind.pull;
-    hit.life    = Infinity;                          // 钩住后不会消失
-    beep(hit.kind.score >= 400 ? 990 : 470, 0.1, "square", 0.04);
+    hit.life = Infinity;                           // 钩住后不会消失
+    hook.catches.push(hit);
+    hook.pull = pullSpeed();                       // 越串越沉
+    const n = hook.catches.length;
+    beep(hit.kind.score >= 400 ? 990 : 430 + n * 70, 0.1, "square", 0.04);
     if (hit.id === "boss")   pop(hook.x, hook.y - 60, "巨兽上钩！慢慢拉！", "#ff9f6b", 20);
     if (hit.id === "angler") pop(hook.x, hook.y - 50, "深海稀客！", "#ffe07a", 19);
+    if (n >= 2) pop(hook.x, hook.y - 34, `串钩 ×${n}！`, "#ffd24a", 19);
     return true;
   }
 
   function land() {
-    const it = hook.hooked;
-    if (!it) {
+    const list = hook.catches;
+    if (!list.length) {
       combo = 0;
       pop(hook.x, SEA_Y + 24, "空钩…", "#9fc0d4", 20);
       beep(180, 0.14, "square", 0.03);
     } else {
-      const gained = Math.round(it.kind.score * comboMult());
-      score += gained;
-      combo++;
-      caught[it.id] = (caught[it.id] || 0) + 1;
-      earned[it.id] = (earned[it.id] || 0) + gained;
-      pop(hook.x, SEA_Y + 16, `${it.kind.name} +${gained}`, it.kind.color || "#ffd24a");
-      splash(hook.x, SEA_Y, it.kind.score >= 400 ? 24 : 12, it.kind.color || "#ffd24a");
-      it.kind.score >= 400 ? fanfare() : beep(820, 0.12, "triangle", 0.05);
+      let total = 0, bonusSec = 0, biggest = list[0];
+      list.forEach((it, i) => {
+        const gained = Math.round(it.kind.score * comboMult());
+        score += gained;
+        combo++;                                   // 一串里每一个都算一次连击
+        total += gained;
+        bonusSec += timeBonus(it.kind);
+        caught[it.id] = (caught[it.id] || 0) + 1;
+        earned[it.id] = (earned[it.id] || 0) + gained;
+        if (it.kind.score > biggest.kind.score) biggest = it;
+        if (list.length === 1) {
+          pop(hook.x, SEA_Y + 16, `${it.kind.name} +${gained}`, it.kind.color || "#ffd24a");
+        } else {
+          pop(hook.x, SEA_Y + 16 + i * 22, `${it.kind.name} +${gained}`,
+              it.kind.color || "#ffd24a", 17);
+        }
+      });
+      if (list.length >= 2) {
+        pop(hook.x, SEA_Y - 12, `${list.length} 连串 +${total}`, "#ffd24a", 24);
+      }
+      const add = Math.min(bonusSec, BONUS_CAP - bonusGiven);
+      if (add > 0) {                               // 时间奖励：钓大货才回时间，每局有总上限
+        bonusGiven += add;
+        timeLeft = Math.min(99, timeLeft + add);
+        pop(hook.x + 70, SEA_Y + 40, `+${add}s`, "#8bf5a8", 21);
+        el.timeBoard.classList.add("boost");
+        clearTimeout(land.boostT);
+        land.boostT = setTimeout(() => el.timeBoard.classList.remove("boost"), 700);
+      }
+      splash(hook.x, SEA_Y, biggest.kind.score >= 400 ? 24 : 12 + list.length * 3,
+             biggest.kind.color || "#ffd24a");
+      biggest.kind.score >= 400 || list.length >= 3
+        ? fanfare() : beep(820, 0.12, "triangle", 0.05);
     }
-    hook.hooked = null;
-    hook.state  = "idle";
+    hook.catches = [];
+    hook.state   = "idle";
     syncHud();
   }
 
@@ -477,18 +543,16 @@
 
     if (hook.state === "down") {
       hook.y += 470 * dt;
-      tryHook();
-      if (hook.state === "down" && hook.y >= FLOOR_Y - 10) {
+      // 下沉不咬钩：像真机台一样沉到底（或玩家点第二下的深度）再往上收，
+      // 收线途中把碰到的全部串走 —— 这样「选哪一竖排」才是真决策
+      if (hook.y >= FLOOR_Y - 10) {
         hook.y = FLOOR_Y - 10;
-        hook.state = "up";
-        hook.pull  = 470;
+        reel();
       }
     } else if (hook.state === "up") {
       hook.y -= hook.pull * dt;
-      if (hook.hooked) {
-        hook.hooked.x = hook.x + Math.sin(waveT * 8) * 4;
-        hook.hooked.y = hook.y + hook.hooked.kind.hh * 0.8;
-      }
+      tryHook();                                   // 收线途中撞到的一起串上来
+      layChain();
       if (hook.y <= SEA_Y) { hook.y = SEA_Y; land(); }
     }
 
@@ -869,14 +933,29 @@
                 turtle:artTurtle, jelly:artJelly, puffer:artPuffer, crab:artCrab,
                 coin:artCoin, chest:artChest };
 
-  // 头顶的分数标签（街机风：黄字黑边）
+  function pill(x, y, w, h, r) {                   // 圆角底片（比 ctx.roundRect 兼容性稳）
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // 头顶的分数标签（街机风：黄字黑边，加半透明底片保证在浅色鱼身上也看得清）
   function drawValue(x, y, val) {
+    const t = String(val);
     ctx.font = "900 17px 'Segoe UI',sans-serif";
     ctx.textAlign = "center";
-    ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,.75)";
-    ctx.strokeText(val, x, y);
+    const w = ctx.measureText(t).width + 12;
+    ctx.fillStyle = "rgba(3,18,32,.5)";
+    pill(x - w / 2, y - 14, w, 19, 6);
+    ctx.fill();
+    ctx.lineWidth = 3.5; ctx.strokeStyle = "rgba(0,0,0,.7)";
+    ctx.strokeText(t, x, y);
     ctx.fillStyle = "#ffd24a";
-    ctx.fillText(val, x, y);
+    ctx.fillText(t, x, y);
   }
 
   function drawItem(it) {
@@ -888,9 +967,23 @@
     if (!["jelly", "coin", "chest"].includes(it.kind.art)) ctx.scale(it.vx >= 0 ? 1 : -1, 1);
     ART[it.kind.art](it);
     ctx.restore();
-    ctx.globalAlpha = fading ? 0.5 : 1;
-    drawValue(it.x, it.y - it.kind.lo, it.kind.score);
-    ctx.globalAlpha = 1;
+  }
+
+  /* 分数标签单独一遍画在最上层：值钱的优先，挤在一起的让位，
+     否则鱼一多（上限 26 个）头顶的数字会叠成一团看不清 */
+  function drawLabels() {
+    const taken = [];
+    const queue = items.concat(hook.catches)
+      .filter(it => it.y > SEA_Y + 4)
+      .sort((a, b) => b.kind.score - a.kind.score);
+    for (const it of queue) {
+      const x = it.x, y = it.y - it.kind.lo;
+      if (taken.some(l => Math.abs(l.x - x) < 34 && Math.abs(l.y - y) < 19)) continue;
+      taken.push({ x, y });
+      ctx.globalAlpha = it.life < 3 && Math.floor(it.life * 6) % 2 === 0 ? 0.5 : 1;
+      drawValue(x, y, it.kind.score);
+      ctx.globalAlpha = 1;
+    }
   }
 
   function draw() {
@@ -903,7 +996,8 @@
     }
 
     for (const it of items.slice().sort((a, b) => b.y - a.y)) drawItem(it);   // 深的先画
-    if (hook.hooked) drawItem(hook.hooked);
+    for (const c of hook.catches) drawItem(c);
+    drawLabels();
 
     drawShip();
     drawLine();
@@ -974,6 +1068,7 @@
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     update(dt);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);        // 逻辑坐标 → 物理像素
     draw();
     requestAnimationFrame(loop);
   }
