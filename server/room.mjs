@@ -41,6 +41,9 @@ export const SPEC = {
   chest:  { score:500,  w:0,  depth:[0.55,0.95], move:"rise"   },
   angler: { score:650,  w:3,  depth:[0.74,0.98], move:"swim"   },
   boss:   { score:1000, w:0,  depth:[0.86,0.99], move:"swim"   },
+  // 危险物：不给分、清连击，水雷还扣时间
+  boot:   { score:0,    w:7,  depth:[0.30,0.95], move:"coin", hazard:true },
+  mine:   { score:0,    w:6,  depth:[0.20,0.90], move:"coin", hazard:true, penalty:3 },
 };
 const SPEED = { coin:[12,28], swim:[24,64], drift:[6,14], paddle:[16,28],
                 jet:[26,46], crawl:[26,44], rise:[8,16] };
@@ -130,7 +133,15 @@ export class Room {
         const it = this.items.get(+msg.id);
         if (!it) return;                             // 已经被别人钓走或过期了
         this.items.delete(it.id);
-        const spec   = SPEC[it.kind];
+        const spec = SPEC[it.kind];
+        if (spec.hazard) {                           // 水雷 / 破靴子
+          p.combo = 0;
+          if (spec.penalty) this.timeLeft = Math.max(0.1, this.timeLeft - spec.penalty);
+          this.broadcast({ t: "grabbed", id: it.id, by: id, kind: it.kind, gained: 0,
+                           score: p.score, combo: 0, bonus: 0,
+                           time: Math.ceil(this.timeLeft) });
+          break;
+        }
         p.combo++;
         const mult   = Math.min(2, 1 + (p.combo - 1) * 0.1) * (this.fever ? FEVER_MULT : 1);
         const gained = Math.round(spec.score * mult);

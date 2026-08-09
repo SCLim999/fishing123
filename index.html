@@ -178,7 +178,10 @@
           <input id="mp-room" placeholder="房间码　如 ABCD" maxlength="12" autocomplete="off">
           <button class="mp-btn" id="btn-online">联机开钓</button>
         </div>
-        <input id="mp-url" placeholder="联机服务器 wss://…（部署后填一次就记住）" autocomplete="off">
+        <div class="mp-row">
+          <input id="mp-name" placeholder="你的昵称" maxlength="12" autocomplete="off">
+          <input id="mp-url" placeholder="联机服务器 wss://…" autocomplete="off">
+        </div>
         <div class="mp-note" id="mp-note">和朋友填同一个房间码，就在同一片海里抢鱼 —— 鱼被谁先钩到就归谁。需要先部署 worker/（见 README）；禁止外连的沙箱页面里联机会被拦掉。</div>
       </div>
     </div>
@@ -188,6 +191,7 @@
       <div class="big" id="over-score">0</div>
       <div class="price" id="over-players" style="display:none"></div>
       <div class="price" id="over-table"></div>
+      <p id="over-miss"></p>
       <p id="over-dex"></p>
       <p id="over-best"></p>
       <button class="cta" id="btn-again">再钓一次</button>
@@ -237,6 +241,11 @@
     chest:  { name:"宝箱",     score:500,  pull:100, depth:[0.55,0.95], hw:31, hh:26, lo:44, w:0,  art:"chest", move:"rise"  },
     angler: { name:"深海灯笼鱼",score:650,  pull:110, depth:[0.74,0.98], hw:46, hh:28, lo:52, w:3,  art:"angler",move:"swim"  },
     boss:   { name:"深海巨兽", score:1000, pull:55,  depth:[0.86,0.99], hw:100,hh:60, lo:78, w:0,  art:"boss",  move:"swim"  },
+    /* 危险物：不给分、清连击，而且很沉 —— 于是「这一竖排干不干净」成了要看清的事 */
+    boot:   { name:"破靴子",   score:0,    pull:200, depth:[0.30,0.95], hw:24, hh:26, lo:36, w:7,  art:"boot",  move:"coin",
+              hazard:true, label:"0",    labelColor:"#c9d6de" },
+    mine:   { name:"水雷",     score:0,    pull:260, depth:[0.20,0.90], hw:26, hh:26, lo:38, w:6,  art:"mine",  move:"coin",
+              hazard:true, penalty:3, label:"-3s", labelColor:"#ff8a7a" },
   };
   // 普通抽取池（宝箱和巨兽有自己的计时器，权重设 0）
   const POOL = Object.keys(KINDS).filter(k => KINDS[k].w > 0);
@@ -263,7 +272,8 @@
     hooks:new Map(),                               // id -> {x,y,st,n,rx,ry}  rx/ry 是插值后的显示位置
     send(o) { if (NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify(o)); },
   };
-  const NET_KEY = "treasureCove.server.v1";        // 记住服务器地址，省得每次填
+  const NET_KEY  = "treasureCove.server.v1";       // 记住服务器地址，省得每次填
+  const NAME_KEY = "treasureCove.name.v1";         // 记住昵称
   const PCOLORS = ["#7fd3ff", "#ffd166", "#ff9145", "#8bf5a8", "#d4699a", "#c6a2ff"];
   const pColor = id => PCOLORS[Math.abs(id | 0) % PCOLORS.length];
   let fever = false;                               // 最后冲刺：进入后得分 ×1.5、刷新加快、不再加时
@@ -289,6 +299,8 @@
     overPlayers: document.getElementById("over-players"),
     mpRoom: document.getElementById("mp-room"),
     mpUrl:  document.getElementById("mp-url"),
+    mpName: document.getElementById("mp-name"),
+    overMiss: document.getElementById("over-miss"),
     mpNote: document.getElementById("mp-note"),
     mpPanel: document.getElementById("mp-panel"),
   };
@@ -380,6 +392,7 @@
     hook = { state:"idle", x:W/2, y:SEA_Y, catches:[], pull:0 };
     spawnTimer = 0; chestTimer = rand(4, 7); bossTimer = rand(15, 25);
     bonusGiven = 0; fever = false;
+    rollMissions();
     el.stage.classList.remove("fever");
     for (let i = 0; i < 14; i++) {                     // 开局就有一片鱼群
       spawnRandom();
@@ -400,6 +413,14 @@
   function endGame() {
     state = "over";
     el.overPlayers.style.display = "none";
+    for (const m of missions) {                   // 「整局不碰水雷」要等局末才知道
+      if (!m.done && m.def.clean && mineHits === 0) missionDone(m);
+    }
+    el.overMiss.innerHTML = missions.length
+      ? "任务　" + missions.map(m =>
+          m.done ? `<b style="color:#9be7ff">✔ ${m.def.text} +${m.def.reward}</b>`
+                 : `<span style="opacity:.55">✕ ${m.def.text}（${Math.min(m.prog, m.def.goal)}/${m.def.goal}）</span>`
+        ).join("　") : "";
     if (score > best) { best = score; localStorage.setItem(BEST_KEY, String(best)); }
     el.best.textContent = best;
     el.overScore.textContent = score + " 分";
@@ -429,6 +450,57 @@
   const MAX_CHAIN = 8;                             // 一趟最多串几个
   const BONUS_CAP = 25;                            // 每局时间奖励总上限，避免高手无限续命
   const SEEN_POP_Y = SEA_Y + 108;                  // 图鉴解锁提示的高度
+
+  /* 每局随机 3 个小目标：除了「分数越高越好」，再给点具体的追求。
+     只在单人局生效 —— 联机的分数由服务器结算，本地不该自己加分。 */
+  const MISSIONS = [
+    { text:"钓 2 只乌贼",     goal:2, reward:300, kind:"squid"  },
+    { text:"钓 2 只海龟",     goal:2, reward:300, kind:"turtle" },
+    { text:"钓 8 枚金币",     goal:8, reward:250, kind:"coin"   },
+    { text:"钓 3 条河豚",     goal:3, reward:250, kind:"puffer" },
+    { text:"钓 2 只螃蟹",     goal:2, reward:300, kind:"crab"   },
+    { text:"钓 1 个宝箱",     goal:1, reward:300, kind:"chest"  },
+    { text:"钓 1 条灯笼鱼",   goal:1, reward:400, kind:"angler" },
+    { text:"拉上 1 只巨兽",   goal:1, reward:500, kind:"boss"   },
+    { text:"一次串钩 4 个",   goal:1, reward:350, chain:4       },
+    { text:"一次串钩 6 个",   goal:1, reward:500, chain:6       },
+    { text:"连击到 6",        goal:1, reward:300, combo:6       },
+    { text:"连击到 10",       goal:1, reward:500, combo:10      },
+    { text:"FEVER 里钓 5 个", goal:5, reward:400, inFever:true  },
+    { text:"整局不碰水雷",    goal:1, reward:400, clean:true    },
+  ];
+  let missions = [], mineHits = 0;
+
+  function rollMissions() {
+    const pool = MISSIONS.slice();
+    missions = [];
+    for (let i = 0; i < 3 && pool.length; i++) {
+      const m = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+      missions.push({ def: m, prog: 0, done: false });
+    }
+    mineHits = 0;
+  }
+
+  function missionDone(m) {
+    m.done = true;
+    score += m.def.reward;
+    pop(W / 2, SEA_Y + 150, `任务完成！${m.def.text}　+${m.def.reward}`, "#9be7ff", 21);
+    [780, 980, 1180].forEach((f, i) => setTimeout(() => beep(f, 0.12, "triangle", 0.05), i * 70));
+  }
+
+  /** 每钓上一个东西调一次（单机）。ev = {kind, chain, combo, fever} */
+  function missionEvent(ev) {
+    if (online) return;
+    for (const m of missions) {
+      if (m.done) continue;
+      const d = m.def;
+      if (d.kind) { if (ev.kind === d.kind) m.prog++; }
+      else if (d.inFever) { if (ev.fever) m.prog++; }
+      else if (d.chain) { if (ev.chain >= d.chain) m.prog = d.goal; }
+      else if (d.combo) { if (ev.combo >= d.combo) m.prog = d.goal; }
+      if (m.prog >= d.goal) missionDone(m);
+    }
+  }
   // 钓上大货多给时间：真正的代价是时间，所以大货必须把时间还回来一部分
   const timeBonus = k => k.score >= 400 ? 3 : k.score >= 150 ? 2 : k.score >= 60 ? 1 : 0;
 
@@ -490,6 +562,24 @@
     return true;
   }
 
+  function hazardHit(it, px, py) {
+    const k = it.kind;
+    if (k.penalty && !online) timeLeft = Math.max(0, timeLeft - k.penalty);
+    pop(px, py, k.penalty ? `${k.name}！-${k.penalty}s` : `${k.name}…没分`,
+        k.labelColor || "#ff8a7a", 20);
+    if (k.penalty) {
+      shakeT = 0.32;
+      splash(px, SEA_Y, 22, "#ff8a7a");
+      el.timeBoard.classList.add("warn");
+      clearTimeout(hazardHit.t);
+      hazardHit.t = setTimeout(() => syncHud(), 700);
+      [220, 150, 90].forEach((f, i) => setTimeout(() => beep(f, 0.2, "sawtooth", 0.06), i * 70));
+      if (navigator.vibrate) try { navigator.vibrate(120); } catch (_) {}
+    } else {
+      beep(200, 0.16, "square", 0.035);
+    }
+  }
+
   function land() {
     const list = hook.catches;
     if (online) {                                  // 得分在「钩到」那一刻就由服务器结算过了
@@ -515,6 +605,12 @@
     } else {
       let total = 0, bonusSec = 0, biggest = list[0];
       list.forEach((it, i) => {
+        if (it.kind.hazard) {                      // 水雷 / 破靴子：不给分、连击清零
+          combo = 0;
+          if (it.kind.penalty) mineHits++;
+          hazardHit(it, hook.x, SEA_Y + 16 + i * 22);
+          return;
+        }
         const gained = Math.round(it.kind.score * comboMult() * (fever ? FEVER_MULT : 1));
         score += gained;
         combo++;                                   // 一串里每一个都算一次连击
@@ -529,6 +625,7 @@
           pop(hook.x, SEEN_POP_Y, `图鉴 +1　${it.kind.name}`, "#9be7ff", 20);
         }
         if (it.kind.score > biggest.kind.score) biggest = it;
+        missionEvent({ kind: it.id, chain: list.length, combo, fever });
         if (list.length === 1) {
           pop(hook.x, SEA_Y + 16, `${it.kind.name} +${gained}`, it.kind.color || "#ffd24a");
         } else {
@@ -536,7 +633,7 @@
               it.kind.color || "#ffd24a", 17);
         }
       });
-      if (list.length >= 2) {
+      if (list.length >= 2 && total > 0) {
         pop(hook.x, SEA_Y - 12, `${list.length} 连串 +${total}`, "#ffd24a", 24);
       }
       const add = fever ? 0 : Math.min(bonusSec, BONUS_CAP - bonusGiven);
@@ -1058,7 +1155,48 @@
     ctx.fillStyle = "#ffd24a"; ctx.fillRect(-26, -11, 52, 5); ctx.fillRect(-5, -5, 10, 17);
   }
 
-  const ART = { fish:artFish, sword:artSword, angler:artAngler, boss:artBoss, squid:artSquid,
+  function artBoot(it) {                                  // 破靴子：钓上来只是白费力气
+    const sway = Math.sin(it.t * 1.6) * 0.12;
+    ctx.rotate(sway);
+    ctx.fillStyle = "#4a3b32";                            // 靴筒
+    pill(-10, -24, 20, 30, 5); ctx.fill();
+    ctx.fillStyle = "#5c4a3f";                            // 靴头
+    ctx.beginPath();
+    ctx.moveTo(-10, -2); ctx.lineTo(24, 4);
+    ctx.quadraticCurveTo(28, 14, 18, 14); ctx.lineTo(-10, 14);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#33282210";
+    ctx.fillStyle = "#2f2621"; ctx.fillRect(-11, 12, 37, 5);   // 鞋底
+    ctx.fillStyle = "rgba(255,255,255,.12)";
+    pill(-6, -20, 7, 16, 3); ctx.fill();
+    ctx.strokeStyle = "#7d8b93"; ctx.lineWidth = 2;            // 挂着的水草
+    ctx.beginPath(); ctx.moveTo(6, -22); ctx.quadraticCurveTo(16, -14, 10, -4); ctx.stroke();
+  }
+
+  function artMine(it) {                                  // 水雷：钓到扣时间
+    const blink = 0.5 + Math.sin(it.t * 6) * 0.5;
+    ctx.fillStyle = `rgba(255,80,60,${0.10 + blink * 0.12})`;
+    ctx.beginPath(); ctx.arc(0, 0, 34, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#8d9aa3"; ctx.lineWidth = 2;            // 系在海底的缆绳
+    ctx.beginPath(); ctx.moveTo(0, 18); ctx.quadraticCurveTo(Math.sin(it.t) * 6, 34, 0, 46); ctx.stroke();
+    ctx.fillStyle = "#2c3a44";                                 // 刺
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + it.t * 0.3;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a - 0.12) * 16, Math.sin(a - 0.12) * 16);
+      ctx.lineTo(Math.cos(a) * 26, Math.sin(a) * 26);
+      ctx.lineTo(Math.cos(a + 0.12) * 16, Math.sin(a + 0.12) * 16);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = "#3b4c58";                                 // 雷体
+    ctx.beginPath(); ctx.arc(0, 0, 17, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.16)";
+    ctx.beginPath(); ctx.arc(-5, -5, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `rgba(255,70,60,${0.45 + blink * 0.55})`;  // 闪烁的红灯
+    ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.fill();
+  }
+
+  const ART = { boot:artBoot, mine:artMine, fish:artFish, sword:artSword, angler:artAngler, boss:artBoss, squid:artSquid,
                 turtle:artTurtle, jelly:artJelly, puffer:artPuffer, crab:artCrab,
                 coin:artCoin, chest:artChest };
 
@@ -1073,7 +1211,7 @@
   }
 
   // 头顶的分数标签（街机风：黄字黑边，加半透明底片保证在浅色鱼身上也看得清）
-  function drawValue(x, y, val) {
+  function drawValue(x, y, val, color) {
     const t = String(val);
     ctx.font = "900 17px 'Segoe UI',sans-serif";
     ctx.textAlign = "center";
@@ -1083,7 +1221,7 @@
     ctx.fill();
     ctx.lineWidth = 3.5; ctx.strokeStyle = "rgba(0,0,0,.7)";
     ctx.strokeText(t, x, y);
-    ctx.fillStyle = "#ffd24a";
+    ctx.fillStyle = color || "#ffd24a";
     ctx.fillText(t, x, y);
   }
 
@@ -1093,7 +1231,7 @@
     ctx.globalAlpha = fading ? 0.4 : 1;
     ctx.translate(it.x, it.y);
     // 水母、金币、宝箱没有朝向；其它按游动方向翻转
-    if (!["jelly", "coin", "chest"].includes(it.kind.art)) ctx.scale(it.vx >= 0 ? 1 : -1, 1);
+    if (!["jelly", "coin", "chest", "mine", "boot"].includes(it.kind.art)) ctx.scale(it.vx >= 0 ? 1 : -1, 1);
     ART[it.kind.art](it);
     ctx.restore();
   }
@@ -1104,13 +1242,14 @@
     const taken = [];
     const queue = items.concat(hook.catches)
       .filter(it => it.y > SEA_Y + 4)
-      .sort((a, b) => b.kind.score - a.kind.score);
+      // 危险物排最前：看清水雷比看清小鱼分数更重要
+      .sort((a, b) => (b.kind.hazard ? 1e6 : b.kind.score) - (a.kind.hazard ? 1e6 : a.kind.score));
     for (const it of queue) {
       const x = it.x, y = it.y - it.kind.lo;
       if (taken.some(l => Math.abs(l.x - x) < 34 && Math.abs(l.y - y) < 19)) continue;
       taken.push({ x, y });
       ctx.globalAlpha = it.life < 3 && Math.floor(it.life * 6) % 2 === 0 ? 0.5 : 1;
-      drawValue(x, y, it.kind.score);
+      drawValue(x, y, it.kind.label != null ? it.kind.label : it.kind.score, it.kind.labelColor);
       ctx.globalAlpha = 1;
     }
   }
@@ -1172,6 +1311,21 @@
         const txt = `连击 ×${combo}　得分 ×${comboMult().toFixed(1)}`;
         ctx.strokeText(txt, 14, hy);
         ctx.fillStyle = "#ffb35e"; ctx.fillText(txt, 14, hy);
+        hy += 24;
+      }
+      if (!online && missions.length) {              // 本局的三个小目标
+        ctx.font = "700 13px 'Segoe UI','PingFang SC',sans-serif";
+        ctx.lineWidth = 3.5; ctx.strokeStyle = "rgba(0,0,0,.6)";
+        for (const m of missions) {
+          const d = m.def;
+          const txt = m.done ? `✔ ${d.text}`
+            : d.goal > 1 ? `◻ ${d.text}（${Math.min(m.prog, d.goal)}/${d.goal}）`
+                         : `◻ ${d.text}`;
+          ctx.strokeText(txt, 14, hy);
+          ctx.fillStyle = m.done ? "#9be7ff" : "rgba(226,244,255,.72)";
+          ctx.fillText(txt, 14, hy);
+          hy += 18;
+        }
       }
       ctx.textAlign = "center";
     }
@@ -1208,6 +1362,7 @@
     hook.pull = pullSpeed();
   }
 
+  let shakeT = 0;                                   // 画面震动剩余时间
   let hookReportT = 0;
   function netHookReport(dt) {                      // 10Hz 上报自己的钩子给别人看
     hookReportT -= dt;
@@ -1239,8 +1394,10 @@
     if (!/\/room$/.test(url)) url += "/room";
     try { localStorage.setItem(NET_KEY, url); } catch (_) {}
 
-    const name = NET.name || "船长" + Math.floor(Math.random() * 90 + 10);
+    const name = (el.mpName.value.trim() || NET.name || "船长" + Math.floor(Math.random() * 90 + 10)).slice(0, 12);
     NET.name = name;
+    el.mpName.value = name;
+    try { localStorage.setItem(NAME_KEY, name); } catch (_) {}
     NET.room = room;
     netNote("正在连接 " + room + " …");
 
@@ -1327,6 +1484,11 @@
           score = m.score; combo = m.combo;
           const it = hook.catches.find(c => c.netId === m.id);
           const kind = KINDS[m.kind];
+          if (kind.hazard) {                       // 扣时间已经由服务器算进 m.time
+            hazardHit({ kind }, hook.x, SEA_Y + 16);
+            syncHud();
+            break;
+          }
           pop(hook.x, SEA_Y + 16, `${kind.name} +${m.gained}`, kind.color || "#ffd24a");
           if (m.bonus > 0) {
             pop(hook.x + 70, SEA_Y + 40, `+${m.bonus}s`, "#8bf5a8", 21);
@@ -1402,6 +1564,7 @@
     el.overTable.innerHTML = Object.keys(KINDS).filter(k => caught[k])
       .map(k => `<span>${KINDS[k].name} ×${caught[k]}</span><span>${earned[k]} 分</span>`).join("")
       || "<span>这局什么都没钓到…</span><span>0 分</span>";
+    el.overMiss.innerHTML = "";                   // 联机局不跑任务
     el.overDex.textContent = newSeen.length
       ? `新图鉴：${newSeen.join("、")}（${seen.size}/${KIND_IDS.length}）`
       : `图鉴 ${seen.size}/${KIND_IDS.length}`;
@@ -1480,13 +1643,15 @@
   document.getElementById("btn-online").addEventListener("click", e => { e.stopPropagation(); goOnline(); });
   el.mpRoom.addEventListener("keydown", e => { if (e.key === "Enter") { e.stopPropagation(); goOnline(); } });
   el.mpUrl.addEventListener("keydown", e => { if (e.key === "Enter") { e.stopPropagation(); goOnline(); } });
+  el.mpName.addEventListener("keydown", e => { if (e.key === "Enter") { e.stopPropagation(); goOnline(); } });
 
   // 记住上次的服务器地址；链接里也能带 ?server=…&room=…&name=…
   {
     const q = new URLSearchParams(location.search);
     try { el.mpUrl.value = q.get("server") || localStorage.getItem(NET_KEY) || ""; } catch (_) {}
+    try { el.mpName.value = q.get("name") || localStorage.getItem(NAME_KEY) || ""; } catch (_) {}
     if (q.get("room")) el.mpRoom.value = q.get("room").toUpperCase();
-    if (q.get("name")) NET.name = q.get("name").slice(0, 12);
+
     if (q.get("server") && q.get("room")) goOnline();     // 分享链接点开就直接进房
   }
   el.sound.addEventListener("click", e => {
@@ -1507,6 +1672,11 @@
     last = now;
     update(dt);
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);        // 逻辑坐标 → 物理像素
+    if (shakeT > 0) {                              // 水雷炸一下
+      shakeT = Math.max(0, shakeT - dt);
+      const k = shakeT * 60;
+      ctx.translate(rand(-k, k), rand(-k, k));
+    }
     draw();
     requestAnimationFrame(loop);
   }
