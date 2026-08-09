@@ -48,9 +48,5 @@ squid: { name:"乌贼", score:240, pull:190, depth:[0.35,0.82],
 
 ## 部署（GitHub Pages）
 
-仓库需要是 **Public**（免费账号的 Pages 只支持公开仓库），然后：
-
-**Settings → Pages → Build and deployment → Source 选 “Deploy from a branch”
-→ Branch 选 `main` / `(root)` → Save**
-
-等一两分钟就会生效在上面那个链接。之后每次推到 `main` 都会自动重新发布。
+已经开好了：Pages 的 Source 设为 `main` 分支 / `(root)`，
+推到 `main` 就会自动重新发布到上面那个链接，不需要任何 workflow。
