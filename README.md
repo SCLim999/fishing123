@@ -46,7 +46,11 @@ squid: { name:"乌贼", score:240, pull:190, depth:[0.35,0.82],
 
 加一种新鱼 = 在 `KINDS` 加一行 + 在 `ART` 加一个小画法函数。
 
-## 部署
+## 部署（GitHub Pages）
 
-推到 `main` 后由 GitHub Actions 自动发布到 GitHub Pages
-（`.github/workflows/pages.yml`，首次运行会自动打开 Pages）。
+仓库需要是 **Public**（免费账号的 Pages 只支持公开仓库），然后：
+
+**Settings → Pages → Build and deployment → Source 选 “Deploy from a branch”
+→ Branch 选 `main` / `(root)` → Save**
+
+等一两分钟就会生效在上面那个链接。之后每次推到 `main` 都会自动重新发布。
