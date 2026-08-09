@@ -1,0 +1,12 @@
+name = "treasure-cove-mp"
+main = "index.js"
+compatibility_date = "2025-01-01"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "FishingRoom"
+
+# Durable Objects 在免费方案上需要 SQLite 存储后端
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["FishingRoom"]

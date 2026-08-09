@@ -123,6 +123,25 @@
   .dex-head{font-size:.82rem;color:#cfe6f2;letter-spacing:1px}
   .dex-head b{color:var(--gold)}
   .price span.locked{opacity:.38}
+
+  /* 联机面板 */
+  .mp{display:flex;flex-direction:column;gap:6px;width:min(100%,23em)}
+  .mp-row{display:flex;gap:6px}
+  .mp input{
+    flex:1;min-width:0;background:rgba(255,255,255,.92);color:#33270f;
+    border:2px solid #8a5000;border-radius:8px;padding:8px 10px;font-size:.86rem;
+    font-family:inherit;
+  }
+  .mp input::placeholder{color:#8a7a5c}
+  .mp-btn{
+    background:linear-gradient(180deg,#7fd3ff,#2b8fd0);color:#04212f;font-weight:900;
+    border:2px solid #14577e;border-radius:8px;padding:8px 14px;font-size:.86rem;
+    cursor:pointer;white-space:nowrap;
+  }
+  .mp-btn:hover{filter:brightness(1.08)}
+  .mp-note{font-size:.74rem;color:#a8c8da;line-height:1.5}
+  .mp-note.err{color:#ffb1a6}
+  .mp-note.ok{color:#8bf5a8}
 </style>
 </head>
 <body>
@@ -153,12 +172,21 @@
          剩 20 秒进入 <b style="color:#ffb35e">FEVER</b>：鱼群翻倍、得分 ×1.5（但不再加时）。</p>
       <div class="dex-head">图鉴 <b id="dex-count">0 / 15</b>　<span style="opacity:.7">钓到过的会亮起来</span></div>
       <div class="price wide" id="menu-price"></div>
-      <button class="cta" id="btn-start">开始钓鱼</button>
+      <button class="cta" id="btn-start">单人开钓</button>
+      <div class="mp" id="mp-panel">
+        <div class="mp-row">
+          <input id="mp-room" placeholder="房间码　如 ABCD" maxlength="12" autocomplete="off">
+          <button class="mp-btn" id="btn-online">联机开钓</button>
+        </div>
+        <input id="mp-url" placeholder="联机服务器 wss://…（部署后填一次就记住）" autocomplete="off">
+        <div class="mp-note" id="mp-note">和朋友填同一个房间码，就在同一片海里抢鱼 —— 鱼被谁先钩到就归谁。</div>
+      </div>
     </div>
 
     <div class="overlay hidden" id="overlay-over">
       <div class="banner">YOU GOT</div>
       <div class="big" id="over-score">0</div>
+      <div class="price" id="over-players" style="display:none"></div>
       <div class="price" id="over-table"></div>
       <p id="over-dex"></p>
       <p id="over-best"></p>
@@ -228,6 +256,16 @@
   let hook = { state:"idle", x:W/2, y:SEA_Y, catches:[], pull:0 };
   let spawnTimer = 0, chestTimer = 5, bossTimer = 18, waveT = 0, bob = 0;
   let bonusGiven = 0;                              // 本局已发放的奖励时间
+  let online = false;                              // 联机模式：世界由服务器说了算
+  const NET = {
+    ws:null, you:null, room:"", name:"",
+    players:new Map(),                             // id -> {id,name,score}
+    hooks:new Map(),                               // id -> {x,y,st,n,rx,ry}  rx/ry 是插值后的显示位置
+    send(o) { if (NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify(o)); },
+  };
+  const NET_KEY = "treasureCove.server.v1";        // 记住服务器地址，省得每次填
+  const PCOLORS = ["#7fd3ff", "#ffd166", "#ff9145", "#8bf5a8", "#d4699a", "#c6a2ff"];
+  const pColor = id => PCOLORS[Math.abs(id | 0) % PCOLORS.length];
   let fever = false;                               // 最后冲刺：进入后得分 ×1.5、刷新加快、不再加时
   const FEVER_AT   = 20;                           // 剩多少秒进入
   const FEVER_MULT = 1.5;
@@ -248,6 +286,11 @@
     stage: document.getElementById("stage"),
     dexCount: document.getElementById("dex-count"),
     overDex:  document.getElementById("over-dex"),
+    overPlayers: document.getElementById("over-players"),
+    mpRoom: document.getElementById("mp-room"),
+    mpUrl:  document.getElementById("mp-url"),
+    mpNote: document.getElementById("mp-note"),
+    mpPanel: document.getElementById("mp-panel"),
   };
   el.best.textContent = best;
   const KIND_IDS = Object.keys(KINDS);
@@ -356,6 +399,7 @@
 
   function endGame() {
     state = "over";
+    el.overPlayers.style.display = "none";
     if (score > best) { best = score; localStorage.setItem(BEST_KEY, String(best)); }
     el.best.textContent = best;
     el.overScore.textContent = score + " 分";
@@ -432,6 +476,8 @@
       if (d <= 1 && d < bestD) { bestD = d; hit = it; }
     }
     if (!hit) return false;
+    // 联机时先乐观挂上（手感优先），服务器说被别人抢先了再摘掉
+    if (online) NET.send({ t:"grab", id: hit.netId });
     items.splice(items.indexOf(hit), 1);
     hit.life = Infinity;                           // 钩住后不会消失
     hook.catches.push(hit);
@@ -446,6 +492,22 @@
 
   function land() {
     const list = hook.catches;
+    if (online) {                                  // 得分在「钩到」那一刻就由服务器结算过了
+      if (!list.length) {
+        combo = 0;
+        NET.send({ t:"miss" });
+        pop(hook.x, SEA_Y + 24, "空钩…", "#9fc0d4", 20);
+        beep(180, 0.14, "square", 0.03);
+      } else {
+        const biggest = list.reduce((a, b) => b.kind.score > a.kind.score ? b : a, list[0]);
+        splash(hook.x, SEA_Y, biggest.kind.score >= 400 ? 24 : 12 + list.length * 3,
+               biggest.kind.color || "#ffd24a");
+        beep(820, 0.12, "triangle", 0.05);
+      }
+      hook.catches = [];
+      hook.state   = "idle";
+      return;
+    }
     if (!list.length) {
       combo = 0;
       pop(hook.x, SEA_Y + 24, "空钩…", "#9fc0d4", 20);
@@ -564,6 +626,15 @@
 
     if (state !== "playing") return;
 
+    if (online) {                                  // 出鱼、计时、FEVER 都由服务器下发
+      timeLeft = Math.max(0, timeLeft - dt);        // 两次 tick 之间自己走，读数才不卡
+      netHookReport(dt);
+      netLerpHooks(dt);
+      moveHook(dt);
+      syncHud();
+      return;
+    }
+
     timeLeft -= dt;
     if (timeLeft <= 0) { timeLeft = 0; syncHud(); endGame(); return; }
 
@@ -596,6 +667,11 @@
       bossTimer = fever ? rand(12, 20) : rand(22, 34);
     }
 
+    moveHook(dt);
+    syncHud();
+  }
+
+  function moveHook(dt) {
     if (hook.state === "down") {
       hook.y += 470 * dt;
       // 下沉不咬钩：像真机台一样沉到底（或玩家点第二下的深度）再往上收，
@@ -610,8 +686,6 @@
       layChain();
       if (hook.y <= SEA_Y) { hook.y = SEA_Y; land(); }
     }
-
-    syncHud();
   }
 
   // ───────────────────────── 背景 ─────────────────────────
@@ -1056,6 +1130,7 @@
 
     drawShip();
     drawLine();
+    if (online) drawRemotes();
 
     for (const s of sparks) {
       ctx.globalAlpha = 1 - s.t / s.life;
@@ -1110,20 +1185,310 @@
     }
   }
 
+  // ───────────────────────── 联机 ─────────────────────────
+  /* 分工：服务器管世界（出什么鱼、归谁、分数、计时、FEVER），
+     本地管手感（鱼怎么游、钩子怎么动）。鱼的移动不走网络，出生时拿到
+     x/y/vx/life 后两边各自推进，所以不会抖；需要仲裁的只有「这条鱼归谁」。 */
+
+  function netItem(w) {                             // 服务器下发的一条鱼
+    const kind = KINDS[w.kind];
+    if (!kind) return;
+    items.push({
+      id: w.kind, netId: w.id, kind, dir: w.vx >= 0 ? 1 : -1,
+      x: w.x, y: w.y, vx: w.vx,
+      wob: Math.random() * Math.PI * 2, t: 0, life: w.life, dart: 0,
+    });
+  }
+
+  function netDrop(netId) {                         // 从海里和我的钩子上都摘掉
+    const i = items.findIndex(it => it.netId === netId);
+    if (i >= 0) items.splice(i, 1);
+    const c = hook.catches.findIndex(it => it.netId === netId);
+    if (c >= 0) hook.catches.splice(c, 1);          // 被别人抢先了，乐观挂上的要回滚
+    hook.pull = pullSpeed();
+  }
+
+  let hookReportT = 0;
+  function netHookReport(dt) {                      // 10Hz 上报自己的钩子给别人看
+    hookReportT -= dt;
+    if (hookReportT > 0) return;
+    hookReportT = 0.1;
+    NET.send({ t:"hook", x: Math.round(hook.x), y: Math.round(hook.y),
+               st: hook.state, n: hook.catches.length });
+  }
+
+  function netLerpHooks(dt) {                       // 别人的钩子插值，避免一跳一跳
+    const k = Math.min(1, dt * 12);
+    for (const h of NET.hooks.values()) {
+      h.rx += (h.x - h.rx) * k;
+      h.ry += (h.y - h.ry) * k;
+    }
+  }
+
+  function netNote(text, cls = "") {
+    el.mpNote.textContent = text;
+    el.mpNote.className = "mp-note" + (cls ? " " + cls : "");
+  }
+
+  function goOnline() {
+    let url  = el.mpUrl.value.trim();
+    const room = (el.mpRoom.value.trim() || "LOBBY").toUpperCase();
+    if (!url) { netNote("先填联机服务器地址（部署 worker/ 后得到的 wss://… 地址）", "err"); return; }
+    if (!/^wss?:\/\//i.test(url)) url = "wss://" + url.replace(/^\/+/, "");
+    url = url.replace(/\/+$/, "");
+    if (!/\/room$/.test(url)) url += "/room";
+    try { localStorage.setItem(NET_KEY, url); } catch (_) {}
+
+    const name = NET.name || "船长" + Math.floor(Math.random() * 90 + 10);
+    NET.name = name;
+    NET.room = room;
+    netNote("正在连接 " + room + " …");
+
+    let ws;
+    try {
+      ws = new WebSocket(`${url}?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}`);
+    } catch (e) { netNote("地址不对：" + e.message, "err"); return; }
+    NET.ws = ws;
+
+    ws.onopen  = () => netNote("已连上房间 " + room + "，等服务器开局…", "ok");
+    ws.onerror = () => netNote("连不上服务器。检查地址是否是 wss:// 且 worker 已部署。", "err");
+    ws.onclose = () => {
+      if (!online) { netNote("连接已断开。", "err"); return; }
+      online = false;
+      state = "menu";
+      NET.hooks.clear(); NET.players.clear();
+      el.over.classList.add("hidden");
+      el.menu.classList.remove("hidden");
+      netNote("和服务器断线了，已回到单人。", "err");
+    };
+    ws.onmessage = ev => {
+      let m; try { m = JSON.parse(ev.data); } catch (_) { return; }
+      netHandle(m);
+    };
+  }
+
+  function netEnter() {                             // 第一次进入联机：清干净本地世界
+    online = true;
+    items = []; pops = []; sparks = [];
+    hook = { state:"idle", x:W/2, y:SEA_Y, catches:[], pull:0 };
+    combo = 0; score = 0; caught = {}; earned = {}; newSeen = [];
+    el.menu.classList.add("hidden");
+    el.over.classList.add("hidden");
+  }
+
+  function netHandle(m) {
+    switch (m.t) {
+      case "welcome":
+        NET.you = m.you;
+        NET.players = new Map(m.players.map(p => [p.id, p]));
+        netEnter();
+        items = [];
+        (m.items || []).forEach(netItem);
+        timeLeft = m.time; fever = m.fever;
+        el.stage.classList.toggle("fever", !!m.fever);
+        if (m.state === "playing") { state = "playing"; }
+        else { state = "playing"; NET.send({ t:"ready" }); }   // 大厅里就直接开一局
+        syncHud();
+        break;
+
+      case "joined":
+        NET.players.set(m.p.id, m.p);
+        pop(W / 2, SEA_Y + 130, m.p.name + " 上船了", "#9be7ff", 19);
+        break;
+
+      case "left":
+        NET.players.delete(m.id);
+        NET.hooks.delete(m.id);
+        break;
+
+      case "start":
+        netEnter();
+        state = "playing";
+        timeLeft = m.time; fever = false; bonusGiven = 0;
+        el.stage.classList.remove("fever");
+        NET.players = new Map((m.players || []).map(p => [p.id, p]));
+        syncHud();
+        break;
+
+      case "spawn":
+        (m.items || []).forEach(netItem);
+        break;
+
+      case "despawn":
+        (m.ids || []).forEach(netDrop);
+        break;
+
+      case "grabbed": {
+        const mine = m.by === NET.you;
+        const p = NET.players.get(m.by);
+        if (p) p.score = m.score;
+        timeLeft = m.time;
+        if (mine) {
+          score = m.score; combo = m.combo;
+          const it = hook.catches.find(c => c.netId === m.id);
+          const kind = KINDS[m.kind];
+          pop(hook.x, SEA_Y + 16, `${kind.name} +${m.gained}`, kind.color || "#ffd24a");
+          if (m.bonus > 0) {
+            pop(hook.x + 70, SEA_Y + 40, `+${m.bonus}s`, "#8bf5a8", 21);
+            el.timeBoard.classList.add("boost");
+            clearTimeout(land.boostT);
+            land.boostT = setTimeout(() => el.timeBoard.classList.remove("boost"), 700);
+          }
+          if (!seen.has(m.kind)) {                  // 联机也算图鉴
+            seen.add(m.kind);
+            newSeen.push(kind.name);
+            try { localStorage.setItem(SEEN_KEY, JSON.stringify([...seen])); } catch (_) {}
+            pop(hook.x, SEEN_POP_Y, `图鉴 +1　${kind.name}`, "#9be7ff", 20);
+          }
+          caught[m.kind] = (caught[m.kind] || 0) + 1;
+          earned[m.kind] = (earned[m.kind] || 0) + m.gained;
+          if (!it) pop(hook.x, SEA_Y + 60, "抢到了！", "#ffd24a", 19);
+        } else {
+          const had = hook.catches.some(c => c.netId === m.id);
+          netDrop(m.id);
+          if (had) pop(hook.x, hook.y - 30, "被抢走了！", "#ff9f6b", 19);
+        }
+        syncHud();
+        break;
+      }
+
+      case "hooks":
+        for (const [idStr, v] of Object.entries(m.h || {})) {
+          const id = +idStr;
+          if (id === NET.you) continue;
+          const h = NET.hooks.get(id) || { x:v[0], y:v[1], rx:v[0], ry:v[1], st:v[2], n:v[3] };
+          h.x = v[0]; h.y = v[1]; h.st = v[2]; h.n = v[3];
+          NET.hooks.set(id, h);
+        }
+        break;
+
+      case "tick":
+        timeLeft = m.time;
+        if (m.fever !== fever) {
+          fever = m.fever;
+          el.stage.classList.toggle("fever", fever);
+          if (fever) {
+            pop(W / 2, SEA_Y + 90, "FEVER！得分 ×1.5", "#ffb35e", 27);
+            [660, 830, 990, 1240].forEach((f, i) => setTimeout(() => beep(f, 0.16, "square", 0.05), i * 80));
+          }
+        }
+        (m.players || []).forEach(p => {
+          const cur = NET.players.get(p.id);
+          if (cur) cur.score = p.score; else NET.players.set(p.id, p);
+          if (p.id === NET.you) score = p.score;
+        });
+        syncHud();
+        break;
+
+      case "over":
+        state = "over";
+        NET.players = new Map((m.players || []).map(p => [p.id, p]));
+        showOnlineResults(m.players || []);
+        break;
+    }
+  }
+
+  function showOnlineResults(list) {
+    const mine = list.find(p => p.id === NET.you);
+    const rank = list.findIndex(p => p.id === NET.you) + 1;
+    score = mine ? mine.score : score;
+    if (score > best) { best = score; try { localStorage.setItem(BEST_KEY, String(best)); } catch (_) {} }
+    el.best.textContent = best;
+    el.overScore.textContent = score + " 分";
+    el.overPlayers.style.display = "";
+    el.overPlayers.innerHTML = list.map((p, i) =>
+      `<span>${["🥇","🥈","🥉"][i] || (i + 1) + "."} ${p.name}${p.id === NET.you ? "（你）" : ""}</span>` +
+      `<span>${p.score}</span>`).join("");
+    el.overTable.innerHTML = Object.keys(KINDS).filter(k => caught[k])
+      .map(k => `<span>${KINDS[k].name} ×${caught[k]}</span><span>${earned[k]} 分</span>`).join("")
+      || "<span>这局什么都没钓到…</span><span>0 分</span>";
+    el.overDex.textContent = newSeen.length
+      ? `新图鉴：${newSeen.join("、")}（${seen.size}/${KIND_IDS.length}）`
+      : `图鉴 ${seen.size}/${KIND_IDS.length}`;
+    renderDex();
+    el.overBest.textContent = list.length > 1
+      ? `${list.length} 人房间，你第 ${rank} 名。点一下再来一局。`
+      : "房间里只有你。点一下再来一局。";
+    el.over.classList.remove("hidden");
+    rank === 1 && list.length > 1 ? fanfare() : beep(300, 0.3, "sawtooth", 0.05);
+  }
+
+  // 联机时画别人的船、鱼线和钩子，右上角一块实时比分
+  function drawRemotes() {
+    for (const [id, h] of NET.hooks) {
+      const col = pColor(id);
+      const p   = NET.players.get(id);
+      ctx.strokeStyle = col; ctx.globalAlpha = 0.75; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(h.rx, SEA_Y - 12); ctx.lineTo(h.rx, h.ry); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = col;                           // 小船
+      ctx.beginPath();
+      ctx.moveTo(h.rx - 15, SEA_Y - 16); ctx.lineTo(h.rx + 15, SEA_Y - 16);
+      ctx.lineTo(h.rx + 9, SEA_Y - 6); ctx.lineTo(h.rx - 9, SEA_Y - 6);
+      ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.arc(h.rx, h.ry, 4, 0, Math.PI * 2); ctx.fill();
+      if (p) {                                       // 名字牌
+        ctx.font = "700 12px 'Segoe UI','PingFang SC',sans-serif";
+        ctx.textAlign = "center";
+        const w = ctx.measureText(p.name).width + 10;
+        ctx.fillStyle = "rgba(3,18,32,.55)";
+        pill(h.rx - w / 2, SEA_Y - 34, w, 15, 5); ctx.fill();
+        ctx.fillStyle = col;
+        ctx.fillText(p.name, h.rx, SEA_Y - 23);
+      }
+    }
+    if (NET.players.size) {                          // 实时比分板
+      const list = [...NET.players.values()].sort((a, b) => b.score - a.score).slice(0, 6);
+      ctx.textAlign = "right";
+      ctx.font = "700 13px 'Segoe UI','PingFang SC',sans-serif";
+      let y = SEA_Y + 26;
+      for (const p of list) {
+        const txt = `${p.name} ${p.score}`;
+        const w = ctx.measureText(txt).width + 12;
+        ctx.fillStyle = "rgba(3,18,32,.5)";
+        pill(W - 12 - w, y - 12, w, 17, 5); ctx.fill();
+        ctx.fillStyle = p.id === NET.you ? "#ffd24a" : pColor(p.id);
+        ctx.fillText(txt, W - 18, y);
+        y += 21;
+      }
+      ctx.textAlign = "center";
+    }
+  }
+
   // ───────────────────────── 输入 ─────────────────────────
   const canvasX = clientX => {
     const r = canvas.getBoundingClientRect();
     return (clientX - r.left) * (W / r.width);
   };
 
+  function requestStart() {
+    if (online) NET.send({ t:"ready" });             // 联机：让服务器开下一局
+    else startGame();
+  }
+
   canvas.addEventListener("pointerdown", e => {
     e.preventDefault();
-    state === "playing" ? cast(canvasX(e.clientX)) : startGame();
+    state === "playing" ? cast(canvasX(e.clientX)) : requestStart();
   });
   el.menu.addEventListener("click", startGame);
-  el.over.addEventListener("click", startGame);
+  el.over.addEventListener("click", requestStart);
   document.getElementById("btn-start").addEventListener("click", e => { e.stopPropagation(); startGame(); });
-  document.getElementById("btn-again").addEventListener("click", e => { e.stopPropagation(); startGame(); });
+  document.getElementById("btn-again").addEventListener("click", e => { e.stopPropagation(); requestStart(); });
+
+  // 联机面板：别让点输入框冒泡到「点一下开始单人」
+  el.mpPanel.addEventListener("click", e => e.stopPropagation());
+  document.getElementById("btn-online").addEventListener("click", e => { e.stopPropagation(); goOnline(); });
+  el.mpRoom.addEventListener("keydown", e => { if (e.key === "Enter") { e.stopPropagation(); goOnline(); } });
+  el.mpUrl.addEventListener("keydown", e => { if (e.key === "Enter") { e.stopPropagation(); goOnline(); } });
+
+  // 记住上次的服务器地址；链接里也能带 ?server=…&room=…&name=…
+  {
+    const q = new URLSearchParams(location.search);
+    try { el.mpUrl.value = q.get("server") || localStorage.getItem(NET_KEY) || ""; } catch (_) {}
+    if (q.get("room")) el.mpRoom.value = q.get("room").toUpperCase();
+    if (q.get("name")) NET.name = q.get("name").slice(0, 12);
+    if (q.get("server") && q.get("room")) goOnline();     // 分享链接点开就直接进房
+  }
   el.sound.addEventListener("click", e => {
     e.stopPropagation();
     soundOn = !soundOn;
@@ -1132,7 +1497,7 @@
   window.addEventListener("keydown", e => {
     if (e.code !== "Space" && e.code !== "Enter") return;
     e.preventDefault();
-    state === "playing" ? cast(hook.x + rand(-120, 120)) : startGame();
+    state === "playing" ? cast(hook.x + rand(-120, 120)) : requestStart();
   });
 
   // ───────────────────────── 主循环 ─────────────────────────
