@@ -110,6 +110,19 @@
   .price span:nth-child(even){text-align:right;color:var(--gold);font-weight:700;font-variant-numeric:tabular-nums}
   @media (min-width:430px){ .price.wide{grid-template-columns:auto auto auto auto} }
   .tip{color:#8fb6cf;font-size:.78rem;margin-top:8px;text-align:center;line-height:1.6}
+
+  /* FEVER：机框发烫 */
+  .stage.fever{
+    box-shadow:0 0 0 3px #ff9b3d,0 0 34px rgba(255,140,50,.6),0 18px 46px rgba(0,0,0,.55);
+    animation:hot .9s ease-in-out infinite;
+  }
+  @keyframes hot{50%{box-shadow:0 0 0 3px #ffd24a,0 0 46px rgba(255,180,70,.8),0 18px 46px rgba(0,0,0,.55)}}
+  @media (prefers-reduced-motion: reduce){ .stage.fever{animation:none} }
+
+  /* 图鉴：没钓到过的暗着 */
+  .dex-head{font-size:.82rem;color:#cfe6f2;letter-spacing:1px}
+  .dex-head b{color:var(--gold)}
+  .price span.locked{opacity:.38}
 </style>
 </head>
 <body>
@@ -136,7 +149,9 @@
          <b style="color:#ffd24a">收线路上碰到的全部串上来</b> —— 挑鱼多的那一竖排下钩！<br>
          钓到大货 <b style="color:#8bf5a8">加时间</b>（大鱼 +2s，宝箱巨兽 +3s），越大越值钱但拉得越慢。<br>
          浅水是小鱼水母，中层有海龟乌贼，深海才有灯笼鱼、宝箱和
-         <b style="color:#ffd24a">1000 分巨兽</b>。</p>
+         <b style="color:#ffd24a">1000 分巨兽</b>。<br>
+         剩 20 秒进入 <b style="color:#ffb35e">FEVER</b>：鱼群翻倍、得分 ×1.5（但不再加时）。</p>
+      <div class="dex-head">图鉴 <b id="dex-count">0 / 15</b>　<span style="opacity:.7">钓到过的会亮起来</span></div>
       <div class="price wide" id="menu-price"></div>
       <button class="cta" id="btn-start">开始钓鱼</button>
     </div>
@@ -145,6 +160,7 @@
       <div class="banner">YOU GOT</div>
       <div class="big" id="over-score">0</div>
       <div class="price" id="over-table"></div>
+      <p id="over-dex"></p>
       <p id="over-best"></p>
       <button class="cta" id="btn-again">再钓一次</button>
     </div>
@@ -172,6 +188,7 @@
   const SPAN    = FLOOR_Y - 30 - TOP;           // 可下钩的水层厚度
   const GAME_TIME = 60;
   const BEST_KEY  = "treasureCove.best.v2";
+  const SEEN_KEY  = "treasureCove.seen.v1";      // 图鉴：钓到过哪些
 
   /* 目标图鉴
      score 分数 / pull 收线速度(px/s，越慢越难拉) / depth 出现深度(0=水面 1=海底)
@@ -204,10 +221,16 @@
   let best  = Number(localStorage.getItem(BEST_KEY) || 0);
   let soundOn = true;
   let caught = {}, earned = {};                 // 条数 / 实得分数（含连击加成）
+  let seen = new Set();                         // 图鉴已解锁
+  try { seen = new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || "[]")); } catch (_) {}
+  let newSeen = [];                             // 本局新解锁的
   let items = [], bubbles = [], pops = [], sparks = [];
   let hook = { state:"idle", x:W/2, y:SEA_Y, catches:[], pull:0 };
   let spawnTimer = 0, chestTimer = 5, bossTimer = 18, waveT = 0, bob = 0;
   let bonusGiven = 0;                              // 本局已发放的奖励时间
+  let fever = false;                               // 最后冲刺：进入后得分 ×1.5、刷新加快、不再加时
+  const FEVER_AT   = 20;                           // 剩多少秒进入
+  const FEVER_MULT = 1.5;
   const ship = { x:W/2, tipX:W/2, tipY:SEA_Y - 60 };
 
   const el = {
@@ -222,10 +245,20 @@
     overBest:  document.getElementById("over-best"),
     price: document.getElementById("menu-price"),
     sound: document.getElementById("btn-sound"),
+    stage: document.getElementById("stage"),
+    dexCount: document.getElementById("dex-count"),
+    overDex:  document.getElementById("over-dex"),
   };
   el.best.textContent = best;
-  el.price.innerHTML = Object.keys(KINDS)
-    .map(k => `<span>${KINDS[k].name}</span><span>${KINDS[k].score}</span>`).join("");
+  const KIND_IDS = Object.keys(KINDS);
+  function renderDex() {
+    el.price.innerHTML = KIND_IDS.map(k => {
+      const got = seen.has(k) ? "" : " class=\"locked\"";
+      return `<span${got}>${seen.has(k) ? "✔" : "·"} ${KINDS[k].name}</span><span${got}>${KINDS[k].score}</span>`;
+    }).join("");
+    el.dexCount.textContent = `${seen.size} / ${KIND_IDS.length}`;
+  }
+  renderDex();
 
   const rand  = (a, b) => a + Math.random() * (b - a);
   const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -299,11 +332,12 @@
 
   // ───────────────────────── 一局 ─────────────────────────
   function resetGame() {
-    score = 0; timeLeft = GAME_TIME; combo = 0; caught = {}; earned = {};
+    score = 0; timeLeft = GAME_TIME; combo = 0; caught = {}; earned = {}; newSeen = [];
     items = []; pops = []; sparks = [];
     hook = { state:"idle", x:W/2, y:SEA_Y, catches:[], pull:0 };
     spawnTimer = 0; chestTimer = rand(4, 7); bossTimer = rand(15, 25);
-    bonusGiven = 0;
+    bonusGiven = 0; fever = false;
+    el.stage.classList.remove("fever");
     for (let i = 0; i < 14; i++) {                     // 开局就有一片鱼群
       spawnRandom();
       const it = items[items.length - 1];
@@ -330,8 +364,12 @@
     el.overTable.innerHTML = rows.length
       ? rows.map(k => `<span>${KINDS[k].name} ×${caught[k]}</span><span>${earned[k]} 分</span>`).join("")
       : "<span>什么都没钓到…</span><span>0 分</span>";
+    el.overDex.textContent = newSeen.length
+      ? `新图鉴：${newSeen.join("、")}（${seen.size}/${KIND_IDS.length}）`
+      : (seen.size >= KIND_IDS.length ? "图鉴已全部收集 ✨" : `图鉴 ${seen.size}/${KIND_IDS.length}`);
+    renderDex();
     el.overBest.textContent =
-      (bonus > 0 ? `其中连击加成 +${bonus} 分。　` : "") +
+      (bonus > 0 ? `其中连击 / FEVER 加成 +${bonus} 分。　` : "") +
       (score >= best && score > 0 ? "🏆 新纪录！" : `最高分 ${best} 分，还差 ${best - score} 分。`);
     el.over.classList.remove("hidden");
     score >= best && score > 0 ? fanfare() : beep(220, 0.35, "sawtooth", 0.05);
@@ -346,6 +384,7 @@
   // ───────────────────────── 放钩 / 收线 ─────────────────────────
   const MAX_CHAIN = 8;                             // 一趟最多串几个
   const BONUS_CAP = 25;                            // 每局时间奖励总上限，避免高手无限续命
+  const SEEN_POP_Y = SEA_Y + 108;                  // 图鉴解锁提示的高度
   // 钓上大货多给时间：真正的代价是时间，所以大货必须把时间还回来一部分
   const timeBonus = k => k.score >= 400 ? 3 : k.score >= 150 ? 2 : k.score >= 60 ? 1 : 0;
 
@@ -414,13 +453,19 @@
     } else {
       let total = 0, bonusSec = 0, biggest = list[0];
       list.forEach((it, i) => {
-        const gained = Math.round(it.kind.score * comboMult());
+        const gained = Math.round(it.kind.score * comboMult() * (fever ? FEVER_MULT : 1));
         score += gained;
         combo++;                                   // 一串里每一个都算一次连击
         total += gained;
         bonusSec += timeBonus(it.kind);
         caught[it.id] = (caught[it.id] || 0) + 1;
         earned[it.id] = (earned[it.id] || 0) + gained;
+        if (!seen.has(it.id)) {                    // 图鉴新解锁
+          seen.add(it.id);
+          newSeen.push(it.kind.name);
+          try { localStorage.setItem(SEEN_KEY, JSON.stringify([...seen])); } catch (_) {}
+          pop(hook.x, SEEN_POP_Y, `图鉴 +1　${it.kind.name}`, "#9be7ff", 20);
+        }
         if (it.kind.score > biggest.kind.score) biggest = it;
         if (list.length === 1) {
           pop(hook.x, SEA_Y + 16, `${it.kind.name} +${gained}`, it.kind.color || "#ffd24a");
@@ -432,7 +477,7 @@
       if (list.length >= 2) {
         pop(hook.x, SEA_Y - 12, `${list.length} 连串 +${total}`, "#ffd24a", 24);
       }
-      const add = Math.min(bonusSec, BONUS_CAP - bonusGiven);
+      const add = fever ? 0 : Math.min(bonusSec, BONUS_CAP - bonusGiven);
       if (add > 0) {                               // 时间奖励：钓大货才回时间，每局有总上限
         bonusGiven += add;
         timeLeft = Math.min(99, timeLeft + add);
@@ -522,23 +567,33 @@
     timeLeft -= dt;
     if (timeLeft <= 0) { timeLeft = 0; syncHud(); endGame(); return; }
 
+    // 最后冲刺：一进入就锁定到本局结束，同时停发时间奖励，
+    // 所以它永远是「最后一段」，不会被大货把时间顶回去而反复开关
+    if (!fever && timeLeft <= FEVER_AT) {
+      fever = true;
+      pop(W / 2, SEA_Y + 90, "FEVER！得分 ×1.5", "#ffb35e", 27);
+      el.stage.classList.add("fever");
+      [660, 830, 990, 1240].forEach((f, i) => setTimeout(() => beep(f, 0.16, "square", 0.05), i * 80));
+    }
+
     spawnTimer -= dt;
     if (spawnTimer <= 0) {
       if (items.length < MAX_ITEMS) spawnRandom();
-      spawnTimer = rand(0.45, 0.9);
+      if (fever && items.length < MAX_ITEMS) spawnRandom();   // 冲刺时鱼群加倍涌入
+      spawnTimer = fever ? rand(0.22, 0.45) : rand(0.45, 0.9);
     }
     chestTimer -= dt;
     if (chestTimer <= 0) {
       spawn("chest");
       beep(360, 0.2, "triangle", 0.045);
-      chestTimer = rand(9, 15);
+      chestTimer = fever ? rand(4, 7) : rand(9, 15);
     }
     bossTimer -= dt;
     if (bossTimer <= 0 && !items.some(i => i.id === "boss")) {
       spawn("boss");
       pop(W / 2, SEA_Y + 60, "深海巨兽出现！", "#ff9f6b");
       beep(90, 0.55, "sawtooth", 0.06);
-      bossTimer = rand(22, 34);
+      bossTimer = fever ? rand(12, 20) : rand(22, 34);
     }
 
     if (hook.state === "down") {
@@ -1020,12 +1075,30 @@
       ctx.globalAlpha = 1;
     }
 
-    if (state === "playing" && combo >= 2) {
-      ctx.font = "900 18px 'Segoe UI','PingFang SC',sans-serif";
-      ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,.6)";
-      const txt = `连击 ×${combo}　得分 ×${comboMult().toFixed(1)}`;
-      ctx.strokeText(txt, W / 2, SEA_Y + 30);
-      ctx.fillStyle = "#ffb35e"; ctx.fillText(txt, W / 2, SEA_Y + 30);
+    // 常驻提示靠左上角贴着水面排，中间那一列留给漂浮的得分，免得叠成一团
+    if (state === "playing") {
+      if (fever) {
+        ctx.fillStyle = `rgba(255,122,40,${0.09 + Math.sin(waveT * 6) * 0.03})`;
+        ctx.fillRect(0, SEA_Y, W, H - SEA_Y);
+      }
+      ctx.textAlign = "left";
+      let hy = SEA_Y + 28;
+      if (fever) {
+        ctx.font = "900 22px 'Segoe UI','PingFang SC',sans-serif";
+        ctx.lineWidth = 5; ctx.strokeStyle = "rgba(0,0,0,.55)";
+        ctx.strokeText("FEVER \u00d71.5", 14, hy);
+        ctx.fillStyle = `rgba(255,196,90,${0.85 + Math.sin(waveT * 7) * 0.15})`;
+        ctx.fillText("FEVER \u00d71.5", 14, hy);
+        hy += 26;
+      }
+      if (combo >= 2) {
+        ctx.font = "900 17px 'Segoe UI','PingFang SC',sans-serif";
+        ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,.6)";
+        const txt = `连击 ×${combo}　得分 ×${comboMult().toFixed(1)}`;
+        ctx.strokeText(txt, 14, hy);
+        ctx.fillStyle = "#ffb35e"; ctx.fillText(txt, 14, hy);
+      }
+      ctx.textAlign = "center";
     }
     if (state === "playing" && timeLeft <= 10) {
       ctx.font = "900 64px 'Segoe UI',sans-serif";
