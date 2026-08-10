@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-Hans">
+<html lang="zh-Hans" id="html-root">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>宝藏海湾 · 钓鱼机</title>
+<title data-i18n="title">宝藏海湾 · 钓鱼机</title>
 <style>
   :root{
     --ink:#fff6dc;
@@ -41,7 +41,7 @@
   /* ── 街机 HUD：木牌 + 羊皮纸 ── */
   .hud{display:flex;flex-wrap:wrap;gap:6px;align-items:stretch;margin-bottom:8px}
   .board{
-    flex:1 1 28%;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px;
+    flex:1 1 20%;min-width:0;display:flex;align-items:center;justify-content:center;gap:5px;
     background:linear-gradient(180deg,var(--wood2),var(--wood));
     border:2px solid #3f230c;border-radius:10px;padding:6px 8px;
     box-shadow:inset 0 2px 0 rgba(255,255,255,.15),0 4px 10px rgba(0,0,0,.4);
@@ -59,10 +59,10 @@
   .board.warn .val{background:#ffb1a6;color:#6d1b12}
   .board.boost .val{background:#8bf5a8;color:#0d4a23}   /* 时间奖励闪一下 */
   .icon-btn{
-    flex:0 0 auto;
+    flex:0 0 auto;min-width:0;
     background:linear-gradient(180deg,var(--wood2),var(--wood));
     border:2px solid #3f230c;color:var(--ink);border-radius:10px;
-    padding:6px 10px;font-size:.9rem;cursor:pointer;line-height:1;
+    padding:6px 9px;font-size:.86rem;cursor:pointer;line-height:1;white-space:nowrap;
   }
 
   .stage{
@@ -194,14 +194,15 @@
 
 <div class="wrap">
   <div class="title">
-    <h1>🏴‍☠️ 宝藏海湾 · 钓鱼机</h1>
-    <span>Treasure Cove</span>
+    <h1 data-i18n="h1">🏴‍☠️ 宝藏海湾 · 钓鱼机</h1>
+    <span data-i18n="sub">Treasure Cove</span>
   </div>
 
   <div class="hud">
-    <div class="board" id="board-time"><span class="lbl">Time</span><span class="val" id="hud-time">60</span></div>
-    <div class="board"><span class="lbl">分数</span><span class="val" id="hud-score">0</span></div>
-    <div class="board"><span class="lbl">Best</span><span class="val" id="hud-best">0</span></div>
+    <div class="board" id="board-time"><span class="lbl" data-i18n="lbl_time">Time</span><span class="val" id="hud-time">60</span></div>
+    <div class="board"><span class="lbl" data-i18n="lbl_score">分数</span><span class="val" id="hud-score">0</span></div>
+    <div class="board"><span class="lbl" data-i18n="lbl_best">Best</span><span class="val" id="hud-best">0</span></div>
+    <button class="icon-btn" id="btn-lang" title="切换语言">中/EN</button>
     <button class="icon-btn" id="btn-sound" title="音效开关">🔊</button>
     <button class="icon-btn" id="btn-full" title="全屏（F）">⛶</button>
   </div>
@@ -210,36 +211,31 @@
     <canvas id="game" width="600" height="980"></canvas>
 
     <div class="overlay" id="overlay-menu">
-      <div class="banner">点一下就开钓！</div>
-      <p>点海里任何位置放钩，钩子会一直往下沉，<b>再点一下就在当前深度开始收线</b>。<br>
-         <b style="color:#ffd24a">收线路上碰到的全部串上来</b> —— 挑鱼多的那一竖排下钩！<br>
-         钓到大货 <b style="color:#8bf5a8">加时间</b>（大鱼 +2s，宝箱巨兽 +3s），越大越值钱但拉得越慢。<br>
-         浅水是小鱼水母，中层有海龟乌贼，深海才有灯笼鱼、宝箱和
-         <b style="color:#ffd24a">1000 分巨兽</b>。<br>
-         剩 20 秒进入 <b style="color:#ffb35e">FEVER</b>：鱼群翻倍、得分 ×1.5（但不再加时）。</p>
-      <div class="dex-head">图鉴 <b id="dex-count">0 / 15</b>　<span style="opacity:.7">钓到过的会亮起来</span></div>
-      <div class="seg" id="seg-dur">局时
+      <div class="banner" data-i18n="banner_start">点一下就开钓！</div>
+      <p data-i18n="how"></p>
+      <div class="dex-head"><span data-i18n="dex_label">图鉴</span> <b id="dex-count">0 / 15</b>　<span style="opacity:.7" data-i18n="dex_hint">钓到过的会亮起来</span></div>
+      <div class="seg" id="seg-dur"><span data-i18n="seg_dur">局时</span>
         <button data-d="30">30s</button><button data-d="60">60s</button><button data-d="120">120s</button>
       </div>
       <div class="price wide" id="menu-price"></div>
       <div class="rank" id="menu-rank"></div>
-      <button class="cta" id="btn-start">单人开钓</button>
+      <button class="cta" id="btn-start" data-i18n="btn_start">单人开钓</button>
       <div class="mp" id="mp-panel">
         <div class="mp-row">
-          <input id="mp-room" placeholder="房间码　如 ABCD" maxlength="12" autocomplete="off">
-          <button class="mp-btn" id="btn-online">联机开钓</button>
+          <input id="mp-room" data-ph="ph_room" maxlength="12" autocomplete="off">
+          <button class="mp-btn" id="btn-online" data-i18n="btn_online">联机开钓</button>
         </div>
         <div class="mp-row">
-          <input id="mp-name" placeholder="你的昵称" maxlength="12" autocomplete="off">
-          <input id="mp-url" placeholder="联机服务器 wss://…" autocomplete="off">
+          <input id="mp-name" data-ph="ph_name" maxlength="12" autocomplete="off">
+          <input id="mp-url" data-ph="ph_url" autocomplete="off">
         </div>
-        <label class="mp-check"><input type="checkbox" id="mp-spec">观战模式（只看不钓）</label>
-        <div class="mp-note" id="mp-note">和朋友填同一个房间码，就在同一片海里抢鱼 —— 鱼被谁先钩到就归谁。需要先部署 worker/（见 README）；禁止外连的沙箱页面里联机会被拦掉。</div>
+        <label class="mp-check"><input type="checkbox" id="mp-spec"><span data-i18n="spec_label">观战模式（只看不钓）</span></label>
+        <div class="mp-note" id="mp-note" data-i18n="mp_note"></div>
       </div>
     </div>
 
     <div class="overlay hidden" id="overlay-over">
-      <div class="banner">YOU GOT</div>
+      <div class="banner" data-i18n="banner_got">YOU GOT</div>
       <div class="big" id="over-score">0</div>
       <div class="price" id="over-players" style="display:none"></div>
       <div class="price" id="over-table"></div>
@@ -247,14 +243,12 @@
       <p id="over-dex"></p>
       <p id="over-best"></p>
       <div class="rank" id="over-rank"></div>
-      <button class="share" id="btn-share">复制 / 分享成绩</button>
-      <button class="cta" id="btn-again">再钓一次</button>
+      <button class="share" id="btn-share" data-i18n="btn_share">复制 / 分享成绩</button>
+      <button class="cta" id="btn-again" data-i18n="btn_again">再钓一次</button>
     </div>
   </div>
 
-  <p class="tip">鼠标点击 / 手机点屏 / 空格键 = 放钩，下沉中再按一次 = 就地收线（不必沉到底）<br>
-    收线途中碰到的全部串上来（最多 8 个，越串越沉）　·　连击加成最高 ×2，空钩清零<br>
-    右上角 ⛶ 或按 <b>F</b> 全屏</p>
+  <p class="tip"><span data-i18n="tip1"></span><br><span data-i18n="tip2"></span><br><span data-i18n="tip3"></span></p>
 </div>
 
 <script>
@@ -283,6 +277,117 @@
   const FLOOR_Y = H - 34;                       // 海底
   const TOP     = SEA_Y + 40;
   const SPAN    = FLOOR_Y - 30 - TOP;           // 可下钩的水层厚度
+  /* ── 语言：玩家自己切换，默认跟浏览器 ──
+     所有会显示给玩家的文字都走 t()，不要在别处写死中文或英文。 */
+  const LANG_KEY = "treasureCove.lang.v1";
+  const I18N = {
+    zh: {
+      title:"宝藏海湾 · 钓鱼机", h1:"🏴‍☠️ 宝藏海湾 · 钓鱼机", sub:"Treasure Cove",
+      lbl_time:"时间", lbl_score:"分数", lbl_best:"最高",
+      t_sound:"音效开关", t_full:"全屏（F）", t_full_exit:"退出全屏（F / Esc）", t_lang:"切换语言",
+      banner_start:"点一下就开钓！",
+      how:'点海里任何位置放钩，钩子会一直往下沉，<b>再点一下就在当前深度开始收线</b>。<br>'+
+          '<b style="color:#ffd24a">收线路上碰到的全部串上来</b> —— 挑鱼多的那一竖排下钩！<br>'+
+          '钓到大货 <b style="color:#8bf5a8">加时间</b>，越大越值钱但拉得越慢；'+
+          '<b style="color:#ff8a7a">水雷扣 3 秒</b>，看清了再下钩。<br>'+
+          '浅水是小鱼水母，中层有海龟乌贼，深海才有灯笼鱼、宝箱和 <b style="color:#ffd24a">1000 分巨兽</b>。<br>'+
+          '最后一段进入 <b style="color:#ffb35e">FEVER</b>：鱼群翻倍、得分 ×1.5（但不再加时）。',
+      dex_label:"图鉴", dex_hint:"钓到过的会亮起来",
+      seg_dur:"局时", btn_start:"单人开钓", btn_online:"联机开钓",
+      ph_room:"房间码　如 ABCD", ph_name:"你的昵称", ph_url:"联机服务器 wss://…",
+      spec_label:"观战模式（只看不钓）",
+      mp_note:"和朋友填同一个房间码，就在同一片海里抢鱼 —— 鱼被谁先钩到就归谁。需要先部署 worker/（见 README）；禁止外连的沙箱页面里联机会被拦掉。",
+      banner_got:"YOU GOT", btn_share:"复制 / 分享成绩", btn_again:"再钓一次",
+      tip1:"鼠标点击 / 手机点屏 / 空格键 = 放钩，下沉中再按一次 = 就地收线（不必沉到底）",
+      tip2:"收线途中碰到的全部串上来（最多 8 个，越串越沉）　·　连击加成最高 ×2，空钩清零",
+      tip3:"右上角 ⛶ 或按 <b>F</b> 全屏",
+      pts:"{n} 分", nothing:"什么都没钓到…", nothing_mp:"这局什么都没钓到…",
+      rank_hd:"本机排行榜 · {d}s 档", rank_empty:"还没有成绩", mode_mp:" · 联机",
+      bonus_line:"其中连击 / FEVER 加成 +{n} 分。　",
+      newrec:"🏆 新纪录！", best_gap:"最高分 {b} 分，还差 {d} 分。",
+      dex_all:"图鉴已全部收集 ✨", dex_prog:"图鉴 {a}/{b}", dex_new:"新图鉴：{list}（{a}/{b}）",
+      miss_prefix:"任务　", mp_rank:"{n} 人房间，你第 {r} 名。点一下再来一局。",
+      mp_alone:"房间里只有你。点一下再来一局。", you:"（你）",
+      pop_empty:"空钩…", pop_chain:"串钩 ×{n}！", pop_string:"{n} 连串 +{t}",
+      pop_boss:"巨兽上钩！慢慢拉！", pop_rare:"深海稀客！",
+      pop_stolen:"被抢走了！", pop_won:"抢到了！", pop_boss_spawn:"深海巨兽出现！",
+      pop_fever:"FEVER！得分 ×1.5", hud_fever:"FEVER ×1.5", hud_combo:"连击 ×{c}　得分 ×{m}",
+      pop_dex:"图鉴 +1　{name}", pop_mission:"任务完成！{text}　+{r}",
+      pop_haz_pen:"{name}！-{s}s", pop_haz_0:"{name}…没分", pop_gain:"{name} +{n}",
+      pop_join:"{name} 上船了", pop_join_spec:"{name} 来看热闹",
+      spectating:"👀 观战中", watching:"👀 {n} 人观战",
+      net_need_url:"先填联机服务器地址（部署 worker/ 后得到的 wss://… 地址）",
+      net_bad_url:"地址不对：{e}", net_connecting:"正在连接 {room} …",
+      net_connected:"已连上房间 {room}", net_spectating:"观战中 · 房间 {room}",
+      net_fail:"连不上服务器。检查地址是否是 wss:// 且 worker 已部署。",
+      net_closed:"连接已断开。", net_dropped:"和服务器断线了，已回到单人。",
+      share_copied:"已复制 ✓", share_shared:"已分享 ✓", share_failed:"复制失败",
+      share_head:"🎣 宝藏海湾 · 钓鱼机 —— {n} 分（{d}s{mp}）", share_mp:" · 联机",
+      share_catch:"战果：", share_miss:"任务：", share_dex:"图鉴 {a}/{b}　本档最高 {best}",
+      nick:"船长",
+    },
+    en: {
+      title:"Treasure Cove · Fishing Cabinet", h1:"🏴‍☠️ Treasure Cove", sub:"Arcade Fishing",
+      lbl_time:"Time", lbl_score:"Score", lbl_best:"Best",
+      t_sound:"Sound on/off", t_full:"Fullscreen (F)", t_full_exit:"Exit fullscreen (F / Esc)", t_lang:"Switch language",
+      banner_start:"One click and you're fishing!",
+      how:'Click anywhere in the sea to drop the hook. It keeps sinking — <b>click again to reel in from that depth</b>.<br>'+
+          '<b style="color:#ffd24a">Everything the line touches on the way up comes with it</b> — pick a crowded column!<br>'+
+          'Big catches <b style="color:#8bf5a8">add time</b> but reel in slowly; a '+
+          '<b style="color:#ff8a7a">sea mine costs 3s</b>, so look before you drop.<br>'+
+          'Small fish and jellyfish up top, turtles and squid mid-water, anglerfish, chests and the '+
+          '<b style="color:#ffd24a">1000-point beast</b> down deep.<br>'+
+          'The last stretch is <b style="color:#ffb35e">FEVER</b>: double the fish, ×1.5 score (but no more time bonuses).',
+      dex_label:"Bestiary", dex_hint:"lights up what you have caught",
+      seg_dur:"Round", btn_start:"Play solo", btn_online:"Play online",
+      ph_room:"Room code, e.g. ABCD", ph_name:"Your name", ph_url:"Server wss://…",
+      spec_label:"Spectate (watch only)",
+      mp_note:"Enter the same room code as your friends and you fish the same sea — a fish goes to whoever hooks it first. Needs the worker/ server deployed (see README); sandboxes that block outbound connections cannot go online.",
+      banner_got:"YOU GOT", btn_share:"Copy / share result", btn_again:"Fish again",
+      tip1:"Click / tap / Space = cast. Press again while sinking to reel in from there.",
+      tip2:"Everything the line touches comes up (max 8, heavier each time)　·　combo up to ×2, an empty hook resets it",
+      tip3:"⛶ top right or press <b>F</b> for fullscreen",
+      pts:"{n} pts", nothing:"Caught nothing…", nothing_mp:"Nothing caught this round…",
+      rank_hd:"Local best · {d}s", rank_empty:"No scores yet", mode_mp:" · online",
+      bonus_line:"Includes +{n} from combo / FEVER.　",
+      newrec:"🏆 New record!", best_gap:"Best is {b} — {d} to go.",
+      dex_all:"Bestiary complete ✨", dex_prog:"Bestiary {a}/{b}", dex_new:"New: {list} ({a}/{b})",
+      miss_prefix:"Missions: ", mp_rank:"{r} of {n} in the room. Click to play again.",
+      mp_alone:"You are alone in the room. Click to play again.", you:" (you)",
+      pop_empty:"Empty hook…", pop_chain:"Chain ×{n}!", pop_string:"{n} in one haul +{t}",
+      pop_boss:"Beast hooked! Reel slowly!", pop_rare:"Deep-sea rarity!",
+      pop_stolen:"Snatched away!", pop_won:"Got it first!", pop_boss_spawn:"A deep-sea beast appears!",
+      pop_fever:"FEVER! Score ×1.5", hud_fever:"FEVER ×1.5", hud_combo:"Combo ×{c}　Score ×{m}",
+      pop_dex:"Bestiary +1　{name}", pop_mission:"Mission done! {text}　+{r}",
+      pop_haz_pen:"{name}! -{s}s", pop_haz_0:"{name}… no points", pop_gain:"{name} +{n}",
+      pop_join:"{name} joined", pop_join_spec:"{name} is watching",
+      spectating:"👀 Spectating", watching:"👀 {n} watching",
+      net_need_url:"Enter the server address first (the wss://… URL from deploying worker/)",
+      net_bad_url:"Bad address: {e}", net_connecting:"Connecting to {room} …",
+      net_connected:"Joined room {room}", net_spectating:"Spectating · room {room}",
+      net_fail:"Cannot reach the server. Check it is a wss:// address and the worker is deployed.",
+      net_closed:"Connection closed.", net_dropped:"Lost the server — back to solo.",
+      share_copied:"Copied ✓", share_shared:"Shared ✓", share_failed:"Copy failed",
+      share_head:"🎣 Treasure Cove — {n} pts ({d}s{mp})", share_mp:" · online",
+      share_catch:"Caught: ", share_miss:"Missions: ", share_dex:"Bestiary {a}/{b}　Best {best}",
+      nick:"Captain",
+    },
+  };
+  let lang = "zh";
+  try {
+    const saved = localStorage.getItem(LANG_KEY);
+    lang = saved === "en" || saved === "zh" ? saved
+         : /^zh/i.test(navigator.language || "") ? "zh" : "en";
+  } catch (_) { lang = /^zh/i.test(navigator.language || "") ? "zh" : "en"; }
+
+  function t(key, vars) {
+    let str = (I18N[lang] && I18N[lang][key]) != null ? I18N[lang][key] : (I18N.zh[key] || key);
+    if (vars) for (const k in vars) str = str.split("{" + k + "}").join(vars[k]);
+    return str;
+  }
+  const kindName = id => (lang === "en" && KINDS[id] && KINDS[id].en) ? KINDS[id].en
+                       : (KINDS[id] ? KINDS[id].name : id);
+
   const DURATIONS = [30, 60, 120];
   const DUR_KEY   = "treasureCove.dur.v1";
   let roundTime   = 60;                          // 本局时长，菜单里可选
@@ -303,25 +408,25 @@
      score 分数 / pull 收线速度(px/s，越慢越难拉) / depth 出现深度(0=水面 1=海底)
      hw,hh 命中半径 / lo 分数标签离中心的高度 / w 出现权重 / art 画法 / move 行为   */
   const KINDS = {
-    coin:   { name:"金币",     score:10,   pull:340, depth:[0.02,0.95], hw:17, hh:17, lo:26, w:24, art:"coin",  move:"coin"  },
-    clown:  { name:"小丑鱼",   score:20,   pull:320, depth:[0.02,0.30], hw:23, hh:14, lo:26, w:12, art:"fish",  move:"swim", len:34, color:"#ff9145", fin:"#e2621c", stripe:true },
-    small:  { name:"小蓝鱼",   score:30,   pull:300, depth:[0.05,0.40], hw:25, hh:15, lo:28, w:13, art:"fish",  move:"swim", len:38, color:"#7fd3ff", fin:"#3f9dd6" },
-    jelly:  { name:"水母",     score:60,   pull:275, depth:[0.06,0.58], hw:24, hh:26, lo:34, w:9,  art:"jelly", move:"drift" },
-    medium: { name:"黄金鱼",   score:80,   pull:240, depth:[0.25,0.66], hw:34, hh:21, lo:36, w:11, art:"fish",  move:"swim", len:58, color:"#ffd166", fin:"#d19320" },
-    puffer: { name:"河豚",     score:110,  pull:230, depth:[0.25,0.62], hw:28, hh:28, lo:40, w:8,  art:"puffer",move:"swim" },
-    crab:   { name:"螃蟹",     score:130,  pull:210, depth:[1,1],       hw:26, hh:18, lo:30, w:5,  art:"crab",  move:"crawl" },
-    big:    { name:"大红鱼",   score:150,  pull:175, depth:[0.50,0.90], hw:48, hh:29, lo:48, w:8,  art:"fish",  move:"swim", len:86, color:"#ff7b6b", fin:"#c9463a" },
-    turtle: { name:"海龟",     score:200,  pull:150, depth:[0.20,0.62], hw:38, hh:26, lo:36, w:5,  art:"turtle",move:"paddle"},
-    squid:  { name:"乌贼",     score:240,  pull:190, depth:[0.35,0.82], hw:38, hh:26, lo:36, w:6,  art:"squid", move:"jet"   },
-    sword:  { name:"剑鱼",     score:320,  pull:165, depth:[0.45,0.85], hw:62, hh:20, lo:42, w:4,  art:"sword", move:"swim"  },
-    king:   { name:"鱼王",     score:400,  pull:120, depth:[0.60,0.95], hw:60, hh:36, lo:76, w:3,  art:"fish",  move:"swim", len:110, color:"#ffe14d", fin:"#d99b12", crown:true },
-    chest:  { name:"宝箱",     score:500,  pull:100, depth:[0.55,0.95], hw:31, hh:26, lo:44, w:0,  art:"chest", move:"rise"  },
-    angler: { name:"深海灯笼鱼",score:650,  pull:110, depth:[0.74,0.98], hw:46, hh:28, lo:52, w:3,  art:"angler",move:"swim"  },
-    boss:   { name:"深海巨兽", score:1000, pull:55,  depth:[0.86,0.99], hw:100,hh:60, lo:78, w:0,  art:"boss",  move:"swim"  },
+    coin:   { name:"金币",     en:"Coin",     score:10,   pull:340, depth:[0.02,0.95], hw:17, hh:17, lo:26, w:24, art:"coin",  move:"coin"  },
+    clown:  { name:"小丑鱼",   en:"Clownfish",   score:20,   pull:320, depth:[0.02,0.30], hw:23, hh:14, lo:26, w:12, art:"fish",  move:"swim", len:34, color:"#ff9145", fin:"#e2621c", stripe:true },
+    small:  { name:"小蓝鱼",   en:"Blue Fish",   score:30,   pull:300, depth:[0.05,0.40], hw:25, hh:15, lo:28, w:13, art:"fish",  move:"swim", len:38, color:"#7fd3ff", fin:"#3f9dd6" },
+    jelly:  { name:"水母",     en:"Jellyfish",     score:60,   pull:275, depth:[0.06,0.58], hw:24, hh:26, lo:34, w:9,  art:"jelly", move:"drift" },
+    medium: { name:"黄金鱼",   en:"Golden Fish",   score:80,   pull:240, depth:[0.25,0.66], hw:34, hh:21, lo:36, w:11, art:"fish",  move:"swim", len:58, color:"#ffd166", fin:"#d19320" },
+    puffer: { name:"河豚",     en:"Pufferfish",     score:110,  pull:230, depth:[0.25,0.62], hw:28, hh:28, lo:40, w:8,  art:"puffer",move:"swim" },
+    crab:   { name:"螃蟹",     en:"Crab",     score:130,  pull:210, depth:[1,1],       hw:26, hh:18, lo:30, w:5,  art:"crab",  move:"crawl" },
+    big:    { name:"大红鱼",   en:"Red Fish",   score:150,  pull:175, depth:[0.50,0.90], hw:48, hh:29, lo:48, w:8,  art:"fish",  move:"swim", len:86, color:"#ff7b6b", fin:"#c9463a" },
+    turtle: { name:"海龟",     en:"Sea Turtle",     score:200,  pull:150, depth:[0.20,0.62], hw:38, hh:26, lo:36, w:5,  art:"turtle",move:"paddle"},
+    squid:  { name:"乌贼",     en:"Squid",     score:240,  pull:190, depth:[0.35,0.82], hw:38, hh:26, lo:36, w:6,  art:"squid", move:"jet"   },
+    sword:  { name:"剑鱼",     en:"Swordfish",     score:320,  pull:165, depth:[0.45,0.85], hw:62, hh:20, lo:42, w:4,  art:"sword", move:"swim"  },
+    king:   { name:"鱼王",     en:"Fish King",     score:400,  pull:120, depth:[0.60,0.95], hw:60, hh:36, lo:76, w:3,  art:"fish",  move:"swim", len:110, color:"#ffe14d", fin:"#d99b12", crown:true },
+    chest:  { name:"宝箱",     en:"Treasure Chest",     score:500,  pull:100, depth:[0.55,0.95], hw:31, hh:26, lo:44, w:0,  art:"chest", move:"rise"  },
+    angler: { name:"深海灯笼鱼", en:"Anglerfish",score:650,  pull:110, depth:[0.74,0.98], hw:46, hh:28, lo:52, w:3,  art:"angler",move:"swim"  },
+    boss:   { name:"深海巨兽", en:"Deep-Sea Beast", score:1000, pull:55,  depth:[0.86,0.99], hw:100,hh:60, lo:78, w:0,  art:"boss",  move:"swim"  },
     /* 危险物：不给分、清连击，而且很沉 —— 于是「这一竖排干不干净」成了要看清的事 */
-    boot:   { name:"破靴子",   score:0,    pull:200, depth:[0.30,0.95], hw:24, hh:26, lo:36, w:7,  art:"boot",  move:"coin",
+    boot:   { name:"破靴子",   en:"Old Boot",   score:0,    pull:200, depth:[0.30,0.95], hw:24, hh:26, lo:36, w:7,  art:"boot",  move:"coin",
               hazard:true, label:"0",    labelColor:"#c9d6de" },
-    mine:   { name:"水雷",     score:0,    pull:260, depth:[0.20,0.90], hw:26, hh:26, lo:38, w:6,  art:"mine",  move:"coin",
+    mine:   { name:"水雷",     en:"Sea Mine",     score:0,    pull:260, depth:[0.20,0.90], hw:26, hh:26, lo:38, w:6,  art:"mine",  move:"coin",
               hazard:true, penalty:3, label:"-3s", labelColor:"#ff8a7a" },
   };
   // 普通抽取池（宝箱和巨兽有自己的计时器，权重设 0）
@@ -366,16 +471,16 @@
 
   function renderRanks(target, hi) {
     const mine = ranks.filter(r => r.dur === roundTime).slice(0, 5);
-    target.innerHTML = `<span class="r-hd">本机排行榜 · ${roundTime}s 档</span>` + (mine.length
+    target.innerHTML = `<span class="r-hd">${t("rank_hd", { d: roundTime })}</span>` + (mine.length
       ? mine.map((r, i) => {
           const me = hi && r.sc === hi.sc && r.at === hi.at ? " r-me" : "";
           const d  = new Date(r.at);
           const day = `${d.getMonth() + 1}/${d.getDate()}`;
           return `<span class="${me}">${["🥇","🥈","🥉"][i] || (i + 1) + "."}</span>` +
-                 `<span class="${me}">${day}${r.mode === "mp" ? " · 联机" : ""}</span>` +
+                 `<span class="${me}">${day}${r.mode === "mp" ? t("mode_mp") : ""}</span>` +
                  `<span class="r-sc${me}">${r.sc}</span>`;
         }).join("")
-      : `<span>—</span><span>还没有成绩</span><span class="r-sc">0</span>`);
+      : `<span>—</span><span>${t("rank_empty")}</span><span class="r-sc">0</span>`);
   }
   let soundOn = true;
   let caught = {}, earned = {};                 // 条数 / 实得分数（含连击加成）
@@ -421,6 +526,7 @@
     overRank: document.getElementById("over-rank"),
     share: document.getElementById("btn-share"),
     mpSpec: document.getElementById("mp-spec"),
+    lang:  document.getElementById("btn-lang"),
     stage: document.getElementById("stage"),
     dexCount: document.getElementById("dex-count"),
     overDex:  document.getElementById("over-dex"),
@@ -438,7 +544,7 @@
     el.price.innerHTML = KIND_IDS.map(k => {
       const got = seen.has(k) ? "" : " class=\"locked\"";
       const val = KINDS[k].label != null ? KINDS[k].label : KINDS[k].score;
-      return `<span${got}>${seen.has(k) ? "✔" : "·"} ${KINDS[k].name}</span><span${got}>${val}</span>`;
+      return `<span${got}>${seen.has(k) ? "✔" : "·"} ${kindName(k)}</span><span${got}>${val}</span>`;
     }).join("");
     el.dexCount.textContent = `${seen.size} / ${KIND_IDS.length}`;
   }
@@ -539,6 +645,30 @@
     beep(660, 0.12, "triangle", 0.05);
   }
 
+  let repaintResults = null;                      // 切语言时用它把结算页整体重排
+
+  function paintSoloResults(entry) {
+    el.overMiss.innerHTML = missions.length
+      ? t("miss_prefix") + missions.map(m =>
+          m.done ? `<b style="color:#9be7ff">✔ ${missionText(m.def)} +${m.def.reward}</b>`
+                 : `<span style="opacity:.55">✕ ${missionText(m.def)}${prog(m)}</span>`
+        ).join("　") : "";
+    el.overScore.textContent = t("pts", { n: score });
+    renderRanks(el.overRank, entry);
+    const rows = Object.keys(KINDS).filter(k => caught[k]);
+    // 加成 = 总分 − 各目标底分 − 任务奖励（任务已经单独列在上面一行了）
+    const bonus = score - rows.reduce((a, k) => a + KINDS[k].score * caught[k], 0) - missionPoints;
+    el.overTable.innerHTML = rows.length
+      ? rows.map(k => `<span>${kindName(k)} ×${caught[k]}</span><span>${t("pts", { n: earned[k] })}</span>`).join("")
+      : `<span>${t("nothing")}</span><span>${t("pts", { n: 0 })}</span>`;
+    el.overDex.textContent = newSeen.length
+      ? t("dex_new", { list: newSeen.join(lang === "en" ? ", " : "、"), a: seen.size, b: KIND_IDS.length })
+      : (seen.size >= KIND_IDS.length ? t("dex_all") : t("dex_prog", { a: seen.size, b: KIND_IDS.length }));
+    el.overBest.textContent =
+      (bonus > 0 ? t("bonus_line", { n: bonus }) : "") +
+      (score >= best && score > 0 ? t("newrec") : t("best_gap", { b: best, d: best - score }));
+  }
+
   function endGame() {
     state = "over";
     el.overPlayers.style.display = "none";
@@ -546,29 +676,13 @@
     for (const m of missions) {                   // 「整局不碰水雷」要等局末才知道
       if (!m.done && m.def.clean && mineHits === 0) missionDone(m);
     }
-    el.overMiss.innerHTML = missions.length
-      ? "任务　" + missions.map(m =>
-          m.done ? `<b style="color:#9be7ff">✔ ${m.def.text} +${m.def.reward}</b>`
-                 : `<span style="opacity:.55">✕ ${m.def.text}（${Math.min(m.prog, m.def.goal)}/${m.def.goal}）</span>`
-        ).join("　") : "";
     if (score > best) { best = score; bests[roundTime] = best; saveBests(); }
     el.best.textContent = best;
-    el.overScore.textContent = score + " 分";
     const entry = { sc: score, at: Date.now() };
-    if (score > 0) { const r = recordScore(score, "solo"); entry.at = ranks.find(x => x.sc === score)?.at || entry.at; }
-    renderRanks(el.overRank, entry);
-    const rows  = Object.keys(KINDS).filter(k => caught[k]);
-    const bonus = score - rows.reduce((s, k) => s + KINDS[k].score * caught[k], 0);
-    el.overTable.innerHTML = rows.length
-      ? rows.map(k => `<span>${KINDS[k].name} ×${caught[k]}</span><span>${earned[k]} 分</span>`).join("")
-      : "<span>什么都没钓到…</span><span>0 分</span>";
-    el.overDex.textContent = newSeen.length
-      ? `新图鉴：${newSeen.join("、")}（${seen.size}/${KIND_IDS.length}）`
-      : (seen.size >= KIND_IDS.length ? "图鉴已全部收集 ✨" : `图鉴 ${seen.size}/${KIND_IDS.length}`);
+    if (score > 0) { recordScore(score, "solo"); entry.at = ranks.find(x => x.sc === score)?.at || entry.at; }
+    paintSoloResults(entry);
     renderDex();
-    el.overBest.textContent =
-      (bonus > 0 ? `其中连击 / FEVER 加成 +${bonus} 分。　` : "") +
-      (score >= best && score > 0 ? "🏆 新纪录！" : `最高分 ${best} 分，还差 ${best - score} 分。`);
+    repaintResults = () => paintSoloResults(entry);
     el.over.classList.remove("hidden");
     score >= best && score > 0 ? fanfare() : beep(220, 0.35, "sawtooth", 0.05);
   }
@@ -586,22 +700,27 @@
   /* 每局随机 3 个小目标：除了「分数越高越好」，再给点具体的追求。
      只在单人局生效 —— 联机的分数由服务器结算，本地不该自己加分。 */
   const MISSIONS = [
-    { text:"钓 2 只乌贼",     goal:2, reward:300, kind:"squid"  },
-    { text:"钓 2 只海龟",     goal:2, reward:300, kind:"turtle" },
-    { text:"钓 8 枚金币",     goal:8, reward:250, kind:"coin"   },
-    { text:"钓 3 条河豚",     goal:3, reward:250, kind:"puffer" },
-    { text:"钓 2 只螃蟹",     goal:2, reward:300, kind:"crab"   },
-    { text:"钓 1 个宝箱",     goal:1, reward:300, kind:"chest"  },
-    { text:"钓 1 条灯笼鱼",   goal:1, reward:400, kind:"angler" },
-    { text:"拉上 1 只巨兽",   goal:1, reward:500, kind:"boss"   },
-    { text:"一次串钩 4 个",   goal:1, reward:350, chain:4       },
-    { text:"一次串钩 6 个",   goal:1, reward:500, chain:6       },
-    { text:"连击到 6",        goal:1, reward:300, combo:6       },
-    { text:"连击到 10",       goal:1, reward:500, combo:10      },
-    { text:"FEVER 里钓 5 个", goal:5, reward:400, inFever:true  },
-    { text:"整局不碰水雷",    goal:1, reward:400, clean:true    },
+    { zh:"钓 2 只乌贼",     en:"Catch 2× Squid",        goal:2, reward:300, kind:"squid"  },
+    { zh:"钓 2 只海龟",     en:"Catch 2× Sea Turtle",   goal:2, reward:300, kind:"turtle" },
+    { zh:"钓 8 枚金币",     en:"Collect 8× Coin",       goal:8, reward:250, kind:"coin"   },
+    { zh:"钓 3 条河豚",     en:"Catch 3× Pufferfish",   goal:3, reward:250, kind:"puffer" },
+    { zh:"钓 2 只螃蟹",     en:"Catch 2× Crab",         goal:2, reward:300, kind:"crab"   },
+    { zh:"钓 1 个宝箱",     en:"Land a Treasure Chest", goal:1, reward:300, kind:"chest"  },
+    { zh:"钓 1 条灯笼鱼",   en:"Land an Anglerfish",    goal:1, reward:400, kind:"angler" },
+    { zh:"拉上 1 只巨兽",   en:"Land the Deep-Sea Beast", goal:1, reward:500, kind:"boss" },
+    { zh:"一次串钩 4 个",   en:"Chain 4 in one haul",   goal:1, reward:350, chain:4       },
+    { zh:"一次串钩 6 个",   en:"Chain 6 in one haul",   goal:1, reward:500, chain:6       },
+    { zh:"连击到 6",        en:"Reach a 6 combo",       goal:1, reward:300, combo:6       },
+    { zh:"连击到 10",       en:"Reach a 10 combo",      goal:1, reward:500, combo:10      },
+    { zh:"FEVER 里钓 5 个", en:"Catch 5 during FEVER",  goal:5, reward:400, inFever:true  },
+    { zh:"整局不碰水雷",    en:"Finish without a mine", goal:1, reward:400, clean:true    },
   ];
-  let missions = [], mineHits = 0;
+  const missionText = d => (lang === "en" && d.en) ? d.en : d.zh;
+  // 进度括号：中文用全角，英文用半角
+  const prog = m => lang === "en"
+    ? ` (${Math.min(m.prog, m.def.goal)}/${m.def.goal})`
+    : `（${Math.min(m.prog, m.def.goal)}/${m.def.goal}）`;
+  let missions = [], mineHits = 0, missionPoints = 0;   // 任务奖励单独记，别混进连击加成
 
   function rollMissions() {
     const pool = MISSIONS.slice();
@@ -611,12 +730,14 @@
       missions.push({ def: m, prog: 0, done: false });
     }
     mineHits = 0;
+    missionPoints = 0;
   }
 
   function missionDone(m) {
     m.done = true;
     score += m.def.reward;
-    pop(W / 2, SEA_Y + 150, `任务完成！${m.def.text}　+${m.def.reward}`, "#9be7ff", 21);
+    missionPoints += m.def.reward;
+    pop(W / 2, SEA_Y + 150, t("pop_mission", { text: missionText(m.def), r: m.def.reward }), "#9be7ff", 21);
     [780, 980, 1180].forEach((f, i) => setTimeout(() => beep(f, 0.12, "triangle", 0.05), i * 70));
   }
 
@@ -688,16 +809,17 @@
     hook.pull = pullSpeed();                       // 越串越沉
     const n = hook.catches.length;
     beep(hit.kind.score >= 400 ? 990 : 430 + n * 70, 0.1, "square", 0.04);
-    if (hit.id === "boss")   pop(hook.x, hook.y - 60, "巨兽上钩！慢慢拉！", "#ff9f6b", 20);
-    if (hit.id === "angler") pop(hook.x, hook.y - 50, "深海稀客！", "#ffe07a", 19);
-    if (n >= 2) pop(hook.x, hook.y - 34, `串钩 ×${n}！`, "#ffd24a", 19);
+    if (hit.id === "boss")   pop(hook.x, hook.y - 60, t("pop_boss"), "#ff9f6b", 20);
+    if (hit.id === "angler") pop(hook.x, hook.y - 50, t("pop_rare"), "#ffe07a", 19);
+    if (n >= 2) pop(hook.x, hook.y - 34, t("pop_chain", { n }), "#ffd24a", 19);
     return true;
   }
 
   function hazardHit(it, px, py) {
     const k = it.kind;
     if (k.penalty && !online) timeLeft = Math.max(0, timeLeft - k.penalty);
-    pop(px, py, k.penalty ? `${k.name}！-${k.penalty}s` : `${k.name}…没分`,
+    const nm = kindName(it.id || (k === KINDS.mine ? "mine" : "boot"));
+    pop(px, py, k.penalty ? t("pop_haz_pen", { name: nm, s: k.penalty }) : t("pop_haz_0", { name: nm }),
         k.labelColor || "#ff8a7a", 20);
     if (k.penalty) {
       shakeT = 0.32;
@@ -718,7 +840,7 @@
       if (!list.length) {
         combo = 0;
         NET.send({ t:"miss" });
-        pop(hook.x, SEA_Y + 24, "空钩…", "#9fc0d4", 20);
+        pop(hook.x, SEA_Y + 24, t("pop_empty"), "#9fc0d4", 20);
         beep(180, 0.14, "square", 0.03);
       } else {
         const biggest = list.reduce((a, b) => b.kind.score > a.kind.score ? b : a, list[0]);
@@ -732,7 +854,7 @@
     }
     if (!list.length) {
       combo = 0;
-      pop(hook.x, SEA_Y + 24, "空钩…", "#9fc0d4", 20);
+      pop(hook.x, SEA_Y + 24, t("pop_empty"), "#9fc0d4", 20);
       beep(180, 0.14, "square", 0.03);
     } else {
       let total = 0, bonusSec = 0, biggest = list[0];
@@ -754,19 +876,19 @@
           seen.add(it.id);
           newSeen.push(it.kind.name);
           try { localStorage.setItem(SEEN_KEY, JSON.stringify([...seen])); } catch (_) {}
-          pop(hook.x, SEEN_POP_Y, `图鉴 +1　${it.kind.name}`, "#9be7ff", 20);
+          pop(hook.x, SEEN_POP_Y, t("pop_dex", { name: kindName(it.id) }), "#9be7ff", 20);
         }
         if (it.kind.score > biggest.kind.score) biggest = it;
         missionEvent({ kind: it.id, chain: list.length, combo, fever });
+        const gtxt = t("pop_gain", { name: kindName(it.id), n: gained });
         if (list.length === 1) {
-          pop(hook.x, SEA_Y + 16, `${it.kind.name} +${gained}`, it.kind.color || "#ffd24a");
+          pop(hook.x, SEA_Y + 16, gtxt, it.kind.color || "#ffd24a");
         } else {
-          pop(hook.x, SEA_Y + 16 + i * 22, `${it.kind.name} +${gained}`,
-              it.kind.color || "#ffd24a", 17);
+          pop(hook.x, SEA_Y + 16 + i * 22, gtxt, it.kind.color || "#ffd24a", 17);
         }
       });
       if (list.length >= 2 && total > 0) {
-        pop(hook.x, SEA_Y - 12, `${list.length} 连串 +${total}`, "#ffd24a", 24);
+        pop(hook.x, SEA_Y - 12, t("pop_string", { n: list.length, t: total }), "#ffd24a", 24);
       }
       const add = fever ? 0 : Math.min(bonusSec, bonusCap() - bonusGiven);
       if (add > 0) {                               // 时间奖励：钓大货才回时间，每局有总上限
@@ -871,7 +993,7 @@
     // 所以它永远是「最后一段」，不会被大货把时间顶回去而反复开关
     if (!fever && timeLeft <= feverAt()) {
       fever = true;
-      pop(W / 2, SEA_Y + 90, "FEVER！得分 ×1.5", "#ffb35e", 27);
+      pop(W / 2, SEA_Y + 90, t("pop_fever"), "#ffb35e", 27);
       el.stage.classList.add("fever");
       [660, 830, 990, 1240].forEach((f, i) => setTimeout(() => beep(f, 0.16, "square", 0.05), i * 80));
     }
@@ -891,7 +1013,7 @@
     bossTimer -= dt;
     if (bossTimer <= 0 && !items.some(i => i.id === "boss")) {
       spawn("boss");
-      pop(W / 2, SEA_Y + 60, "深海巨兽出现！", "#ff9f6b");
+      pop(W / 2, SEA_Y + 60, t("pop_boss_spawn"), "#ff9f6b");
       beep(90, 0.55, "sawtooth", 0.06);
       bossTimer = fever ? rand(12, 20) : rand(22, 34);
     }
@@ -1405,8 +1527,8 @@
       ctx.font = "900 20px 'Segoe UI','PingFang SC',sans-serif";
       ctx.textAlign = "center";
       ctx.lineWidth = 5; ctx.strokeStyle = "rgba(0,0,0,.55)";
-      ctx.strokeText("👀 观战中", W / 2, 52);       // 放天空里，别压到别人的船
-      ctx.fillStyle = "#9be7ff"; ctx.fillText("👀 观战中", W / 2, 52);
+      ctx.strokeText(t("spectating"), W / 2, 52);   // 放天空里，别压到别人的船
+      ctx.fillStyle = "#9be7ff"; ctx.fillText(t("spectating"), W / 2, 52);
     }
 
     for (const s of sparks) {
@@ -1438,15 +1560,15 @@
       if (fever) {
         ctx.font = "900 22px 'Segoe UI','PingFang SC',sans-serif";
         ctx.lineWidth = 5; ctx.strokeStyle = "rgba(0,0,0,.55)";
-        ctx.strokeText("FEVER \u00d71.5", 14, hy);
+        ctx.strokeText(t("hud_fever"), 14, hy);
         ctx.fillStyle = `rgba(255,196,90,${0.85 + Math.sin(waveT * 7) * 0.15})`;
-        ctx.fillText("FEVER \u00d71.5", 14, hy);
+        ctx.fillText(t("hud_fever"), 14, hy);
         hy += 26;
       }
       if (combo >= 2) {
         ctx.font = "900 17px 'Segoe UI','PingFang SC',sans-serif";
         ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,.6)";
-        const txt = `连击 ×${combo}　得分 ×${comboMult().toFixed(1)}`;
+        const txt = t("hud_combo", { c: combo, m: comboMult().toFixed(1) });
         ctx.strokeText(txt, 14, hy);
         ctx.fillStyle = "#ffb35e"; ctx.fillText(txt, 14, hy);
         hy += 24;
@@ -1456,9 +1578,8 @@
         ctx.lineWidth = 3.5; ctx.strokeStyle = "rgba(0,0,0,.6)";
         for (const m of missions) {
           const d = m.def;
-          const txt = m.done ? `✔ ${d.text}`
-            : d.goal > 1 ? `◻ ${d.text}（${Math.min(m.prog, d.goal)}/${d.goal}）`
-                         : `◻ ${d.text}`;
+          const mt = missionText(d);
+          const txt = m.done ? `✔ ${mt}` : d.goal > 1 ? `◻ ${mt}${prog(m)}` : `◻ ${mt}`;
           ctx.strokeText(txt, 14, hy);
           ctx.fillStyle = m.done ? "#9be7ff" : "rgba(226,244,255,.72)";
           ctx.fillText(txt, 14, hy);
@@ -1526,37 +1647,38 @@
   function goOnline() {
     let url  = el.mpUrl.value.trim();
     const room = (el.mpRoom.value.trim() || "LOBBY").toUpperCase();
-    if (!url) { netNote("先填联机服务器地址（部署 worker/ 后得到的 wss://… 地址）", "err"); return; }
+    if (!url) { netNote(t("net_need_url"), "err"); return; }
     if (!/^wss?:\/\//i.test(url)) url = "wss://" + url.replace(/^\/+/, "");
     url = url.replace(/\/+$/, "");
     if (!/\/room$/.test(url)) url += "/room";
     try { localStorage.setItem(NET_KEY, url); } catch (_) {}
 
-    const name = (el.mpName.value.trim() || NET.name || "船长" + Math.floor(Math.random() * 90 + 10)).slice(0, 12);
+    const name = (el.mpName.value.trim() || NET.name ||
+                  t("nick") + Math.floor(Math.random() * 90 + 10)).slice(0, 12);
     NET.name = name;
     el.mpName.value = name;
     try { localStorage.setItem(NAME_KEY, name); } catch (_) {}
     NET.room = room;
-    netNote("正在连接 " + room + " …");
+    netNote(t("net_connecting", { room }));
 
     let ws;
     try {
       const q = `room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}` +
                 (el.mpSpec.checked ? "&spec=1" : "");
       ws = new WebSocket(`${url}?${q}`);
-    } catch (e) { netNote("地址不对：" + e.message, "err"); return; }
+    } catch (e) { netNote(t("net_bad_url", { e: e.message }), "err"); return; }
     NET.ws = ws;
 
-    ws.onopen  = () => netNote("已连上房间 " + room + "，等服务器开局…", "ok");
-    ws.onerror = () => netNote("连不上服务器。检查地址是否是 wss:// 且 worker 已部署。", "err");
+    ws.onopen  = () => netNote(t("net_connected", { room }), "ok");
+    ws.onerror = () => netNote(t("net_fail"), "err");
     ws.onclose = () => {
-      if (!online) { netNote("连接已断开。", "err"); return; }
+      if (!online) { netNote(t("net_closed"), "err"); return; }
       online = false;
       state = "menu";
       NET.hooks.clear(); NET.players.clear();
       el.over.classList.add("hidden");
       el.menu.classList.remove("hidden");
-      netNote("和服务器断线了，已回到单人。", "err");
+      netNote(t("net_dropped"), "err");
     };
     ws.onmessage = ev => {
       let m; try { m = JSON.parse(ev.data); } catch (_) { return; }
@@ -1585,7 +1707,7 @@
         (m.items || []).forEach(netItem);
         timeLeft = m.time; fever = m.fever;
         if (m.dur) { roundTime = m.dur; renderDurSeg(); }
-        netNote(spectating ? `观战中 · 房间 ${NET.room}` : `已连上房间 ${NET.room}`, "ok");
+        netNote(spectating ? t("net_spectating", { room: NET.room }) : t("net_connected", { room: NET.room }), "ok");
         el.stage.classList.toggle("fever", !!m.fever);
         if (m.state === "playing") { state = "playing"; }
         else { state = "playing"; NET.send({ t:"ready" }); }   // 大厅里就直接开一局
@@ -1594,9 +1716,9 @@
 
       case "joined":
         specCount = m.specs || 0;
-        if (m.p.spec) { pop(W / 2, SEA_Y + 130, m.p.name + " 来看热闹", "#9be7ff", 18); break; }
+        if (m.p.spec) { pop(W / 2, SEA_Y + 130, t("pop_join_spec", { name: m.p.name }), "#9be7ff", 18); break; }
         NET.players.set(m.p.id, m.p);
-        pop(W / 2, SEA_Y + 130, m.p.name + " 上船了", "#9be7ff", 19);
+        pop(W / 2, SEA_Y + 130, t("pop_join", { name: m.p.name }), "#9be7ff", 19);
         break;
 
       case "left":
@@ -1637,7 +1759,7 @@
             syncHud();
             break;
           }
-          pop(hook.x, SEA_Y + 16, `${kind.name} +${m.gained}`, kind.color || "#ffd24a");
+          pop(hook.x, SEA_Y + 16, t("pop_gain", { name: kindName(m.kind), n: m.gained }), kind.color || "#ffd24a");
           if (m.bonus > 0) {
             pop(hook.x + 70, SEA_Y + 40, `+${m.bonus}s`, "#8bf5a8", 21);
             el.timeBoard.classList.add("boost");
@@ -1646,17 +1768,17 @@
           }
           if (!seen.has(m.kind)) {                  // 联机也算图鉴
             seen.add(m.kind);
-            newSeen.push(kind.name);
+            newSeen.push(kindName(m.kind));
             try { localStorage.setItem(SEEN_KEY, JSON.stringify([...seen])); } catch (_) {}
-            pop(hook.x, SEEN_POP_Y, `图鉴 +1　${kind.name}`, "#9be7ff", 20);
+            pop(hook.x, SEEN_POP_Y, t("pop_dex", { name: kindName(m.kind) }), "#9be7ff", 20);
           }
           caught[m.kind] = (caught[m.kind] || 0) + 1;
           earned[m.kind] = (earned[m.kind] || 0) + m.gained;
-          if (!it) pop(hook.x, SEA_Y + 60, "抢到了！", "#ffd24a", 19);
+          if (!it) pop(hook.x, SEA_Y + 60, t("pop_won"), "#ffd24a", 19);
         } else {
           const had = hook.catches.some(c => c.netId === m.id);
           netDrop(m.id);
-          if (had) pop(hook.x, hook.y - 30, "被抢走了！", "#ff9f6b", 19);
+          if (had) pop(hook.x, hook.y - 30, t("pop_stolen"), "#ff9f6b", 19);
         }
         syncHud();
         break;
@@ -1679,7 +1801,7 @@
           fever = m.fever;
           el.stage.classList.toggle("fever", fever);
           if (fever) {
-            pop(W / 2, SEA_Y + 90, "FEVER！得分 ×1.5", "#ffb35e", 27);
+            pop(W / 2, SEA_Y + 90, t("pop_fever"), "#ffb35e", 27);
             [660, 830, 990, 1240].forEach((f, i) => setTimeout(() => beep(f, 0.16, "square", 0.05), i * 80));
           }
         }
@@ -1709,22 +1831,22 @@
     if (score > 0) { recordScore(score, "mp"); entry.at = ranks.find(x => x.sc === score)?.at || entry.at; }
     el.overRank.style.display = "";
     renderRanks(el.overRank, entry);
-    el.overScore.textContent = score + " 分";
+    el.overScore.textContent = t("pts", { n: score });
     el.overPlayers.style.display = "";
     el.overPlayers.innerHTML = list.map((p, i) =>
-      `<span>${["🥇","🥈","🥉"][i] || (i + 1) + "."} ${p.name}${p.id === NET.you ? "（你）" : ""}</span>` +
+      `<span>${["🥇","🥈","🥉"][i] || (i + 1) + "."} ${p.name}${p.id === NET.you ? t("you") : ""}</span>` +
       `<span>${p.score}</span>`).join("");
     el.overTable.innerHTML = Object.keys(KINDS).filter(k => caught[k])
-      .map(k => `<span>${KINDS[k].name} ×${caught[k]}</span><span>${earned[k]} 分</span>`).join("")
-      || "<span>这局什么都没钓到…</span><span>0 分</span>";
+      .map(k => `<span>${kindName(k)} ×${caught[k]}</span><span>${t("pts", { n: earned[k] })}</span>`).join("")
+      || `<span>${t("nothing_mp")}</span><span>${t("pts", { n: 0 })}</span>`;
     el.overMiss.innerHTML = "";                   // 联机局不跑任务
     el.overDex.textContent = newSeen.length
-      ? `新图鉴：${newSeen.join("、")}（${seen.size}/${KIND_IDS.length}）`
-      : `图鉴 ${seen.size}/${KIND_IDS.length}`;
+      ? t("dex_new", { list: newSeen.join(lang === "en" ? ", " : "、"), a: seen.size, b: KIND_IDS.length })
+      : t("dex_prog", { a: seen.size, b: KIND_IDS.length });
     renderDex();
     el.overBest.textContent = list.length > 1
-      ? `${list.length} 人房间，你第 ${rank} 名。点一下再来一局。`
-      : "房间里只有你。点一下再来一局。";
+      ? t("mp_rank", { n: list.length, r: rank }) : t("mp_alone");
+    repaintResults = () => showOnlineResults(list);
     el.over.classList.remove("hidden");
     rank === 1 && list.length > 1 ? fanfare() : beep(300, 0.3, "sawtooth", 0.05);
   }
@@ -1768,7 +1890,7 @@
         y += 21;
       }
       if (specCount > 0) {
-        const txt = `👀 ${specCount} 人观战`;
+        const txt = t("watching", { n: specCount });
         const w = ctx.measureText(txt).width + 12;
         ctx.fillStyle = "rgba(3,18,32,.5)";
         pill(W - 12 - w, y - 12, w, 17, 5); ctx.fill();
@@ -1778,6 +1900,36 @@
       ctx.textAlign = "center";
     }
   }
+
+  // ───────────────────────── 语言切换 ─────────────────────────
+  /* 静态文案统一由 data-i18n / data-ph 驱动，切换时整页重刷一遍，
+     动态文字（漂浮提示、画布上的字）本来就是每帧或每次事件走 t()，不用管。 */
+  function applyLang() {
+    document.documentElement.lang = lang === "zh" ? "zh-Hans" : "en";
+    document.title = t("title");
+    document.querySelectorAll("[data-i18n]").forEach(n => {
+      const k = n.getAttribute("data-i18n");
+      if (n.tagName === "TITLE") return;
+      n.innerHTML = t(k);
+    });
+    document.querySelectorAll("[data-ph]").forEach(n => {
+      n.placeholder = t(n.getAttribute("data-ph"));
+    });
+    el.sound.title = t("t_sound");
+    el.lang.title  = t("t_lang");
+    el.lang.textContent = lang === "zh" ? "EN" : "中";
+    el.full.title = (isFs() || manualIm) ? t("t_full_exit") : t("t_full");
+    renderDex();                                   // 图鉴里的鱼名
+    renderRanks(el.menuRank);                      // 排行榜表头
+    if (!el.over.classList.contains("hidden") && repaintResults) repaintResults();
+  }
+
+  el.lang.addEventListener("click", e => {
+    e.stopPropagation();
+    lang = lang === "zh" ? "en" : "zh";
+    try { localStorage.setItem(LANG_KEY, lang); } catch (_) {}
+    applyLang();
+  });
 
   // ───────────────────────── 全屏 ─────────────────────────
   /* iOS 的 iPhone Safari 至今不给普通元素全屏，所以 API 不可用或被拒时
@@ -1790,7 +1942,7 @@
     const on = isFs() || manualIm;
     document.body.classList.toggle("immersive", on);
     el.full.textContent = on ? "⤢" : "⛶";
-    el.full.title = on ? "退出全屏（F / Esc）" : "全屏（F）";
+    el.full.title = on ? t("t_full_exit") : t("t_full");
     resizeCanvas();                                  // 尺寸变了就重算内部分辨率，别被拉虚
   }
 
@@ -1870,16 +2022,15 @@
 
   // ── 分享成绩：能用系统分享就分享，否则复制到剪贴板 ──
   function shareText() {
-    const lines = [
-      `🎣 宝藏海湾 · 钓鱼机 —— ${score} 分（${roundTime}s${online ? " · 联机" : ""}）`,
-    ];
+    const sep = lang === "en" ? ", " : "、";
+    const lines = [t("share_head", { n: score, d: roundTime, mp: online ? t("share_mp") : "" })];
     const got = Object.keys(KINDS).filter(k => caught[k]);
     if (got.length) {
-      lines.push("战果：" + got.map(k => `${KINDS[k].name}×${caught[k]}`).join("、"));
+      lines.push(t("share_catch") + got.map(k => `${kindName(k)}×${caught[k]}`).join(sep));
     }
     const doneM = missions.filter(m => m.done);
-    if (!online && doneM.length) lines.push("任务：" + doneM.map(m => m.def.text).join("、"));
-    lines.push(`图鉴 ${seen.size}/${KIND_IDS.length}　本档最高 ${best}`);
+    if (!online && doneM.length) lines.push(t("share_miss") + doneM.map(m => missionText(m.def)).join(sep));
+    lines.push(t("share_dex", { a: seen.size, b: KIND_IDS.length, best }));
     lines.push(location.origin + location.pathname);
     return lines.join("\n");
   }
@@ -1887,11 +2038,12 @@
   el.share.addEventListener("click", async e => {
     e.stopPropagation();
     const text = shareText();
-    const done = t => { el.share.textContent = t; setTimeout(() => el.share.textContent = "复制 / 分享成绩", 1600); };
+    const done = msg => { el.share.textContent = msg;
+      setTimeout(() => el.share.textContent = t("btn_share"), 1600); };
     try {
-      if (navigator.share) { await navigator.share({ text }); done("已分享 ✓"); return; }
+      if (navigator.share) { await navigator.share({ text }); done(t("share_shared")); return; }
       await navigator.clipboard.writeText(text);
-      done("已复制 ✓");
+      done(t("share_copied"));
     } catch (_) {
       try {                                        // 老浏览器 / 没有剪贴板权限时的退路
         const ta = document.createElement("textarea");
@@ -1899,8 +2051,8 @@
         document.body.appendChild(ta); ta.select();
         document.execCommand("copy");
         ta.remove();
-        done("已复制 ✓");
-      } catch (_) { done("复制失败"); }
+        done(t("share_copied"));
+      } catch (_) { done(t("share_failed")); }
     }
   });
 
@@ -1954,8 +2106,8 @@
     requestAnimationFrame(loop);
   }
 
+  applyLang();
   renderDurSeg();
-  renderRanks(el.menuRank);
   resetGame();                       // 菜单背景也有鱼在游
   requestAnimationFrame(loop);
 })();
