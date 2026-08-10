@@ -121,7 +121,8 @@
     width:100vw;max-width:100vw;height:100vh;
     display:flex;flex-direction:column;gap:4px;padding:5px;
   }
-  body.immersive .hud{flex:0 0 auto;flex-wrap:nowrap;margin:0;align-self:center}
+  body.immersive .hud{flex:0 0 auto;flex-wrap:nowrap;margin:0;align-self:center;justify-content:center}
+  body.immersive .board{max-width:230px}
   body.immersive .board{padding:4px 6px}
   body.immersive .board .lbl{font-size:.62rem;letter-spacing:1px}
   body.immersive .stage{
@@ -258,21 +259,53 @@
   // ───────────────────────── 场地 ─────────────────────────
   const canvas = document.getElementById("game");
   const ctx    = canvas.getContext("2d");
-  const W = canvas.width, H = canvas.height;    // 600 × 980，竖屏机台（逻辑坐标）
+  /* 逻辑坐标系：高度固定 980，宽度可变 ——
+     全屏时按可用区域的宽高比把海面加宽，好把屏幕填满（不再是两边一片黑）。
+     联机时强制回到 BASE_W：所有人必须是同一片海才公平，服务器也是按 600 宽发坐标的。 */
+  const BASE_W = 600, MAX_W = 2200, H = 980;
+  let W = BASE_W;
+  const widthScale = () => W / BASE_W;           // 海面比标准宽多少倍
   /* 按「实际显示多大」× 屏幕像素密度决定内部分辨率，否则就是把 600×980 拉大 ——
      手机和高分屏上会发虚，全屏后更明显。上限 3 倍，免得大屏上填太多像素。 */
   let DPR = 1;
   const hudEl = document.querySelector(".hud");
+  const PIXEL_BUDGET = 6.2e6;                    // 内部分辨率上限，宽屏时别把填充量拉爆
+
+  function desiredW() {
+    if (online) return BASE_W;                   // 联机：同一片海
+    if (!document.body.classList.contains("immersive")) return BASE_W;
+    const availH = Math.max(240, window.innerHeight - hudEl.offsetHeight - 18);
+    const aspect = window.innerWidth / availH;
+    return Math.round(Math.min(MAX_W, Math.max(BASE_W, H * aspect)));
+  }
+
+  // 宽度变了，海里的东西按比例挪，别让鱼群瞬移
+  function rescaleWorld(k) {
+    for (const it of items)   it.x *= k;
+    for (const b of bubbles)  b.x *= k;
+    for (const sp of sparks)  sp.x *= k;
+    for (const pp of pops)    pp.x *= k;
+    for (const c of hook.catches) c.x *= k;
+    hook.x *= k;
+    ship.x *= k; ship.tipX *= k;
+  }
+
   function resizeCanvas() {
-    const cssW = canvas.getBoundingClientRect().width || W;
-    DPR = Math.min(3, Math.max(1, (window.devicePixelRatio || 1) * (cssW / W)));
+    const want = desiredW();
+    if (want !== W) { rescaleWorld(want / W); W = want; }
+
+    const rect = canvas.getBoundingClientRect();
+    // 全屏时画布高度由 flex 决定、宽度随逻辑比例走，所以从高度反推显示宽度
+    const cssH = rect.height || H;
+    const cssW = document.body.classList.contains("immersive") ? cssH * (W / H) : (rect.width || W);
+    const cap  = Math.min(3, Math.sqrt(PIXEL_BUDGET / (W * H)));
+    DPR = Math.min(cap, Math.max(1, (window.devicePixelRatio || 1) * (cssW / W)));
     canvas.width  = Math.round(W * DPR);
     canvas.height = Math.round(H * DPR);
-    // 全屏时机台由高度决定宽度，HUD 跟着它对齐，否则宽屏上会被拉成一条
+    buildBackground();                             // 尺寸变了，背景要重烘
     hudEl.style.width = document.body.classList.contains("immersive")
       ? Math.round(cssW) + "px" : "";
   }
-  resizeCanvas();
   const SEA_Y   = 210;                          // 水面
   const FLOOR_Y = H - 34;                       // 海底
   const TOP     = SEA_Y + 40;
@@ -432,7 +465,7 @@
   // 普通抽取池（宝箱和巨兽有自己的计时器，权重设 0）
   const POOL = Object.keys(KINDS).filter(k => KINDS[k].w > 0);
   const POOL_TOTAL = POOL.reduce((s, k) => s + KINDS[k].w, 0);
-  const MAX_ITEMS = 26;
+  const maxItems = () => Math.round(26 * widthScale());
 
   // ───────────────────────── 状态 ─────────────────────────
   let state = "menu";                           // menu | playing | over
@@ -629,7 +662,7 @@
     bonusGiven = 0; fever = false;
     rollMissions();
     el.stage.classList.remove("fever");
-    for (let i = 0; i < 14; i++) {                     // 开局就有一片鱼群
+    for (let i = 0, n = Math.round(14 * widthScale()); i < n; i++) {   // 开局就有一片鱼群
       spawnRandom();
       const it = items[items.length - 1];
       it.x = rand(30, W - 30);
@@ -1000,9 +1033,10 @@
 
     spawnTimer -= dt;
     if (spawnTimer <= 0) {
-      if (items.length < MAX_ITEMS) spawnRandom();
-      if (fever && items.length < MAX_ITEMS) spawnRandom();   // 冲刺时鱼群加倍涌入
-      spawnTimer = fever ? rand(0.22, 0.45) : rand(0.45, 0.9);
+      if (items.length < maxItems()) spawnRandom();
+      if (fever && items.length < maxItems()) spawnRandom();   // 冲刺时鱼群加倍涌入
+      // 海面越宽，出鱼越密，密度才和标准宽度一致
+      spawnTimer = (fever ? rand(0.22, 0.45) : rand(0.45, 0.9)) / widthScale();
     }
     chestTimer -= dt;
     if (chestTimer <= 0) {
@@ -1040,42 +1074,70 @@
   }
 
   // ───────────────────────── 背景 ─────────────────────────
-  function drawSky() {
-    const g = ctx.createLinearGradient(0, 0, 0, SEA_Y);
-    g.addColorStop(0, "#8fd8f2"); g.addColorStop(1, "#d9f2fb");
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, SEA_Y);
+  /* 背景分两半：
+     天空、云、小岛、海水渐变、光柱、海底这些是静态的 —— 每帧重建渐变再铺满
+     几百万像素太贵（宽屏全屏时实测帧时间 30ms），所以烘到离屏画布，每帧贴一次。
+     只有水面波纹、海草摆动、气泡这些动的还每帧画。 */
+  const bgCanvas = document.createElement("canvas");
+  const bgCtx    = bgCanvas.getContext("2d");
 
-    ctx.fillStyle = "rgba(255,255,255,.75)";
-    [[90, 52, 22], [430, 40, 26], [300, 78, 15]].forEach(([x, y, r]) => {
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.arc(x + r, y + 5, r * 0.72, 0, Math.PI * 2);
-      ctx.arc(x - r, y + 7, r * 0.6, 0, Math.PI * 2);
-      ctx.fill();
-    });
-    ctx.fillStyle = "#5d7f6a";
-    ctx.beginPath();
-    ctx.moveTo(W - 150, SEA_Y); ctx.quadraticCurveTo(W - 90, SEA_Y - 78, W - 20, SEA_Y);
-    ctx.closePath(); ctx.fill();
+  function paintStatic(g) {
+    const sky = g.createLinearGradient(0, 0, 0, SEA_Y);
+    sky.addColorStop(0, "#8fd8f2"); sky.addColorStop(1, "#d9f2fb");
+    g.fillStyle = sky; g.fillRect(0, 0, W, SEA_Y);
+
+    g.fillStyle = "rgba(255,255,255,.75)";
+    // 云按宽度铺开，数量也跟着长，否则加宽后天空一片空
+    const clouds = [];
+    for (let i = 0, n = Math.max(3, Math.round(W / 420)); i < n; i++) {
+      const f = (i + 0.5) / n + (i % 2 ? 0.06 : -0.06);
+      clouds.push([f * W, 38 + (i % 3) * 22, 15 + (i % 3) * 6]);
+    }
+    clouds.forEach(([x, y, r]) => {
+        g.beginPath();
+        g.arc(x, y, r, 0, Math.PI * 2);
+        g.arc(x + r, y + 5, r * 0.72, 0, Math.PI * 2);
+        g.arc(x - r, y + 7, r * 0.6, 0, Math.PI * 2);
+        g.fill();
+      });
+    g.fillStyle = "#5d7f6a";                                   // 远处小岛
+    g.beginPath();
+    g.moveTo(W - 150, SEA_Y); g.quadraticCurveTo(W - 90, SEA_Y - 78, W - 20, SEA_Y);
+    g.closePath(); g.fill();
+
+    const sea = g.createLinearGradient(0, SEA_Y, 0, H);
+    sea.addColorStop(0, "#1d8fc4"); sea.addColorStop(0.4, "#0e6395"); sea.addColorStop(1, "#03203a");
+    g.fillStyle = sea; g.fillRect(0, SEA_Y, W, H - SEA_Y);
+
+    g.save();                                                  // 阳光光柱
+    g.globalAlpha = 0.07; g.fillStyle = "#dff4ff";
+    for (let i = 0, n = Math.max(4, Math.round(W / 150)); i < n; i++) {
+      const x = 60 + i * 150;
+      g.beginPath();
+      g.moveTo(x, SEA_Y); g.lineTo(x + 54, SEA_Y);
+      g.lineTo(x + 170, H); g.lineTo(x + 30, H);
+      g.closePath(); g.fill();
+    }
+    g.restore();
+
+    g.fillStyle = "#0a2b3f";                                   // 海底
+    g.beginPath(); g.moveTo(0, H);
+    for (let x = 0; x <= W; x += 30) g.lineTo(x, FLOOR_Y + Math.sin(x * 0.02) * 7);
+    g.lineTo(W, H); g.closePath(); g.fill();
   }
 
-  function drawSea() {
-    const g = ctx.createLinearGradient(0, SEA_Y, 0, H);
-    g.addColorStop(0, "#1d8fc4"); g.addColorStop(0.4, "#0e6395"); g.addColorStop(1, "#03203a");
-    ctx.fillStyle = g; ctx.fillRect(0, SEA_Y, W, H - SEA_Y);
+  function buildBackground() {
+    bgCanvas.width  = canvas.width;
+    bgCanvas.height = canvas.height;
+    bgCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    bgCtx.clearRect(0, 0, W, H);
+    paintStatic(bgCtx);
+  }
 
-    ctx.save();                                        // 阳光光柱
-    ctx.globalAlpha = 0.07; ctx.fillStyle = "#dff4ff";
-    for (let i = 0; i < 4; i++) {
-      const x = 60 + i * 160 + Math.sin(waveT * 0.4 + i) * 16;
-      ctx.beginPath();
-      ctx.moveTo(x, SEA_Y); ctx.lineTo(x + 54, SEA_Y);
-      ctx.lineTo(x + 170, H); ctx.lineTo(x + 30, H);
-      ctx.closePath(); ctx.fill();
-    }
-    ctx.restore();
+  function drawBackground() {
+    ctx.drawImage(bgCanvas, 0, 0, W, H);
 
-    ctx.strokeStyle = "rgba(230,250,255,.75)"; ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(230,250,255,.75)"; ctx.lineWidth = 3;   // 水面波纹
     ctx.beginPath();
     for (let x = 0; x <= W; x += 8) {
       const y = SEA_Y + Math.sin(x * 0.032 + waveT * 2.2) * 3.5 + Math.sin(x * 0.012 - waveT * 1.4) * 2;
@@ -1083,13 +1145,8 @@
     }
     ctx.stroke();
 
-    ctx.fillStyle = "#0a2b3f";                          // 海底
-    ctx.beginPath(); ctx.moveTo(0, H);
-    for (let x = 0; x <= W; x += 30) ctx.lineTo(x, FLOOR_Y + Math.sin(x * 0.02) * 7);
-    ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
-
-    ctx.strokeStyle = "rgba(56,192,150,.5)"; ctx.lineWidth = 6;
-    for (let i = 0; i < 7; i++) {
+    ctx.strokeStyle = "rgba(56,192,150,.5)"; ctx.lineWidth = 6;      // 海草摆动
+    for (let i = 0, n = Math.max(7, Math.round(W / 92)); i < n; i++) {
       const x = 30 + i * 92, h = 34 + (i % 3) * 26;
       ctx.beginPath(); ctx.moveTo(x, FLOOR_Y);
       ctx.quadraticCurveTo(x + Math.sin(waveT * 1.3 + i) * 15, FLOOR_Y - h * 0.6,
@@ -1509,8 +1566,7 @@
   }
 
   function draw() {
-    drawSky();
-    drawSea();
+    drawBackground();
 
     for (const b of bubbles) {
       ctx.fillStyle = "rgba(210,244,255,.3)";
@@ -1674,6 +1730,7 @@
     ws.onclose = () => {
       if (!online) { netNote(t("net_closed"), "err"); return; }
       online = false;
+      resizeCanvas();                               // 回到单人，宽度可以再放开
       state = "menu";
       NET.hooks.clear(); NET.players.clear();
       el.over.classList.add("hidden");
@@ -1688,6 +1745,7 @@
 
   function netEnter() {                             // 第一次进入联机：清干净本地世界
     online = true;
+    resizeCanvas();                                 // 联机固定标准宽度
     items = []; pops = []; sparks = [];
     hook = { state:"idle", x:W/2, y:SEA_Y, catches:[], pull:0 };
     combo = 0; score = 0; caught = {}; earned = {}; newSeen = [];
@@ -2106,6 +2164,7 @@
     requestAnimationFrame(loop);
   }
 
+  resizeCanvas();                    // 放这里：它要读 online / items，那些在上面是 let 声明
   applyLang();
   renderDurSeg();
   resetGame();                       // 菜单背景也有鱼在游
