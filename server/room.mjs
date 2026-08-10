@@ -12,10 +12,12 @@
  * 那是一条 grab 消息，服务器先到先得。
  */
 
-export const GAME_TIME  = 60;
-export const BONUS_CAP  = 25;     // 每局时间奖励上限（和单机一致）
-export const FEVER_AT   = 20;
+export const GAME_TIME  = 60;     // 默认局时；房间会用第一个点开始的人选的时长
+export const DURATIONS  = [30, 60, 120];
 export const FEVER_MULT = 1.5;
+// 局时可变，所以 FEVER 门槛和时间奖励上限都按比例算（和客户端同一套公式）
+export const feverAt  = dur => Math.min(20, Math.max(10, Math.round(dur * 0.33)));
+export const bonusCap = dur => Math.round(dur * 0.42);
 export const OVER_HOLD  = 8;      // 结算停留几秒后回到大厅
 const MAX_ITEMS = 26;
 const MAX_CHAIN = 8;
@@ -64,6 +66,7 @@ export class Room {
     this.items   = new Map();      // id -> {id, kind, x, y, vx, life, bornAt}
     this.nextId  = 1;
     this.state   = "lobby";        // lobby | playing | over
+    this.roundTime = GAME_TIME;    // 本局时长（30 / 60 / 120）
     this.timeLeft = GAME_TIME;
     this.fever = false;
     this.bonusGiven = 0;
@@ -79,10 +82,17 @@ export class Room {
     for (const id of this.players.keys()) if (id !== except) this.sendTo(id, msg);
   }
 
-  playerList() {
+  playerList() {                   // 只列真正在钓的人
     return [...this.players.values()]
+      .filter(p => !p.spec)
       .map(p => ({ id: p.id, name: p.name, score: p.score }))
       .sort((a, b) => b.score - a.score);
+  }
+
+  specCount() {
+    let n = 0;
+    for (const p of this.players.values()) if (p.spec) n++;
+    return n;
   }
 
   itemList() { return [...this.items.values()].map(this.wire); }
@@ -90,19 +100,21 @@ export class Room {
                       vx: Math.round(it.vx * 10) / 10, life: Math.round(it.life * 10) / 10 }; }
 
   // ───────────────────────── 进出房间 ─────────────────────────
-  join(id, name) {
-    const p = { id, name: (name || "船长").slice(0, 12), score: 0, combo: 0,
-                hook: { x: W / 2, y: SEA_Y, st: "idle", n: 0 } };
+  join(id, name, spec = false) {
+    const p = { id, name: (name || (spec ? "观众" : "船长")).slice(0, 12), score: 0, combo: 0,
+                spec: !!spec, hook: { x: W / 2, y: SEA_Y, st: "idle", n: 0 } };
     this.players.set(id, p);
     this.sendTo(id, { t: "welcome", you: id, state: this.state, time: Math.ceil(this.timeLeft),
-                      fever: this.fever, players: this.playerList(), items: this.itemList() });
-    this.broadcast({ t: "joined", p: { id: p.id, name: p.name, score: 0 } }, id);
+                      fever: this.fever, dur: this.roundTime, spec: p.spec,
+                      players: this.playerList(), items: this.itemList(), specs: this.specCount() });
+    this.broadcast({ t: "joined", p: { id: p.id, name: p.name, score: 0, spec: p.spec },
+                     specs: this.specCount() }, id);
     return p;
   }
 
   leave(id) {
     if (!this.players.delete(id)) return;
-    this.broadcast({ t: "left", id });
+    this.broadcast({ t: "left", id, specs: this.specCount() });
     if (!this.players.size) this.reset("lobby");   // 房间空了就收拾干净
   }
 
@@ -114,11 +126,12 @@ export class Room {
     if (!p || !msg || typeof msg.t !== "string") return;
 
     switch (msg.t) {
-      case "ready":                                  // 任何人都能开一局
-        if (this.state !== "playing") this.startRound();
+      case "ready":                                  // 谁先点谁定这一局的时长
+        if (this.state !== "playing") this.startRound(+msg.dur);
         break;
 
       case "hook": {                                 // 只是给别人看的，不参与判定
+        if (p.spec) return;                          // 观众没有钩子
         const h = p.hook;
         h.x  = clamp(+msg.x || 0, 0, W);
         h.y  = clamp(+msg.y || 0, 0, FLOOR_Y);
@@ -129,7 +142,7 @@ export class Room {
       }
 
       case "grab": {                                 // 先到先得，抢同一条鱼只能有一个赢
-        if (this.state !== "playing") return;
+        if (this.state !== "playing" || p.spec) return;
         const it = this.items.get(+msg.id);
         if (!it) return;                             // 已经被别人钓走或过期了
         this.items.delete(it.id);
@@ -148,7 +161,7 @@ export class Room {
         p.score += gained;
         let add = 0;
         if (!this.fever) {                           // FEVER 中不再加时，和单机同一条规则
-          add = Math.min(timeBonus(spec.score), BONUS_CAP - this.bonusGiven);
+          add = Math.min(timeBonus(spec.score), bonusCap(this.roundTime) - this.bonusGiven);
           if (add > 0) { this.bonusGiven += add; this.timeLeft = Math.min(99, this.timeLeft + add); }
         }
         this.broadcast({ t: "grabbed", id: it.id, by: id, kind: it.kind, gained,
@@ -164,17 +177,19 @@ export class Room {
   }
 
   // ───────────────────────── 一局 ─────────────────────────
-  startRound() {
+  startRound(dur) {
+    this.roundTime = DURATIONS.includes(+dur) ? +dur : GAME_TIME;
     this.reset("playing");
     for (const p of this.players.values()) { p.score = 0; p.combo = 0; }
-    this.broadcast({ t: "start", time: GAME_TIME, players: this.playerList() });
+    this.broadcast({ t: "start", time: this.roundTime, dur: this.roundTime,
+                     players: this.playerList() });
     for (let i = 0; i < 12; i++) this.spawnOne(true);   // 开局先铺一片鱼
     this.flushSpawns();
   }
 
   reset(state) {
     this.state = state;
-    this.timeLeft = GAME_TIME;
+    this.timeLeft = this.roundTime;
     this.fever = false;
     this.bonusGiven = 0;
     this.spawnTimer = 0;
@@ -188,7 +203,7 @@ export class Room {
     this.state = "over";
     this.timeLeft = 0;
     this.overAt = OVER_HOLD;
-    this.broadcast({ t: "over", players: this.playerList() });
+    this.broadcast({ t: "over", players: this.playerList(), dur: this.roundTime });
   }
 
   // ───────────────────────── 出鱼 ─────────────────────────
@@ -239,7 +254,7 @@ export class Room {
     const wasFever = this.fever;
     this.timeLeft -= dt;
     if (this.timeLeft <= 0) { this.endRound(); return; }
-    if (!this.fever && this.timeLeft <= FEVER_AT) this.fever = true;
+    if (!this.fever && this.timeLeft <= feverAt(this.roundTime)) this.fever = true;
 
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0) {
@@ -279,7 +294,7 @@ export class Room {
     if (this.tickAcc >= 1 || this.fever !== wasFever) {
       this.tickAcc = 0;
       this.broadcast({ t: "tick", time: Math.ceil(this.timeLeft), fever: this.fever,
-                       players: this.playerList() });
+                       players: this.playerList(), specs: this.specCount() });
     }
   }
 }

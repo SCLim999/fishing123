@@ -38,12 +38,13 @@ wss.on("connection", (ws, req) => {
   const url    = new URL(req.url, "http://x");
   const rname  = (url.searchParams.get("room") || "lobby").slice(0, 24).toUpperCase();
   const pname  = url.searchParams.get("name") || "船长";
+  const spec   = url.searchParams.get("spec") === "1";
   const id     = nextClientId++;
   const entry  = getRoom(rname);
 
   entry.clients.set(id, ws);
-  entry.room.join(id, pname);
-  console.log(`+ ${pname}#${id} → 房间 ${rname}（${entry.room.players.size} 人）`);
+  entry.room.join(id, pname, spec);
+  console.log(`+ ${pname}#${id}${spec ? "（观战）" : ""} → 房间 ${rname}（${entry.room.players.size} 人）`);
 
   ws.on("message", data => {
     let msg; try { msg = JSON.parse(data); } catch (_) { return; }

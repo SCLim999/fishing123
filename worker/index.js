@@ -47,13 +47,14 @@ export class FishingRoom {
   async fetch(request) {
     const url   = new URL(request.url);
     const pname = url.searchParams.get("name") || "船长";
+    const spec  = url.searchParams.get("spec") === "1";
     const pair  = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];
     const id = this.nextId++;
 
     server.accept();
     this.clients.set(id, server);
-    this.room.join(id, pname);
+    this.room.join(id, pname, spec);
     this.ensureTicking();
 
     server.addEventListener("message", ev => {
