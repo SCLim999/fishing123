@@ -111,6 +111,25 @@
   @media (min-width:430px){ .price.wide{grid-template-columns:auto auto auto auto} }
   .tip{color:#8fb6cf;font-size:.78rem;margin-top:8px;text-align:center;line-height:1.6}
 
+  /* 全屏（或不支持全屏 API 时的沉浸模式）：收起标题和说明，
+     用 flex 让画布吃掉 HUD 之外的全部高度 —— 不要按 vh 算高度再祈祷放得下，
+     那样 HUD 一换行就会把机台顶出屏幕。 */
+  body.immersive{padding:0;height:100vh;overflow:hidden;justify-content:flex-start}
+  body.immersive .title,
+  body.immersive .tip{display:none}
+  body.immersive .wrap{
+    width:100vw;max-width:100vw;height:100vh;
+    display:flex;flex-direction:column;gap:4px;padding:5px;
+  }
+  body.immersive .hud{flex:0 0 auto;flex-wrap:nowrap;margin:0;align-self:center}
+  body.immersive .board{padding:4px 6px}
+  body.immersive .board .lbl{font-size:.62rem;letter-spacing:1px}
+  body.immersive .stage{
+    flex:1 1 auto;min-height:0;width:auto;align-self:center;max-width:100%;
+    border-width:2px;box-shadow:0 0 0 2px #6b3f1d;
+  }
+  body.immersive canvas{height:100%;width:auto;max-width:100%}
+
   /* FEVER：机框发烫 */
   .stage.fever{
     box-shadow:0 0 0 3px #ff9b3d,0 0 34px rgba(255,140,50,.6),0 18px 46px rgba(0,0,0,.55);
@@ -157,6 +176,7 @@
     <div class="board"><span class="lbl">分数</span><span class="val" id="hud-score">0</span></div>
     <div class="board"><span class="lbl">Best</span><span class="val" id="hud-best">0</span></div>
     <button class="icon-btn" id="btn-sound" title="音效开关">🔊</button>
+    <button class="icon-btn" id="btn-full" title="全屏（F）">⛶</button>
   </div>
 
   <div class="stage" id="stage">
@@ -199,7 +219,8 @@
   </div>
 
   <p class="tip">鼠标点击 / 手机点屏 / 空格键 = 放钩，下沉中再按一次 = 就地收线（不必沉到底）<br>
-    收线途中碰到的全部串上来（最多 8 个，越串越沉）　·　连击加成最高 ×2，空钩清零</p>
+    收线途中碰到的全部串上来（最多 8 个，越串越沉）　·　连击加成最高 ×2，空钩清零<br>
+    右上角 ⛶ 或按 <b>F</b> 全屏</p>
 </div>
 
 <script>
@@ -210,10 +231,20 @@
   const canvas = document.getElementById("game");
   const ctx    = canvas.getContext("2d");
   const W = canvas.width, H = canvas.height;    // 600 × 980，竖屏机台（逻辑坐标）
-  // 按屏幕像素密度渲染，否则在手机和高分屏上是把 600×980 拉大，线条和数字会发虚
-  const DPR = Math.min(2, window.devicePixelRatio || 1);
-  canvas.width  = W * DPR;
-  canvas.height = H * DPR;
+  /* 按「实际显示多大」× 屏幕像素密度决定内部分辨率，否则就是把 600×980 拉大 ——
+     手机和高分屏上会发虚，全屏后更明显。上限 3 倍，免得大屏上填太多像素。 */
+  let DPR = 1;
+  const hudEl = document.querySelector(".hud");
+  function resizeCanvas() {
+    const cssW = canvas.getBoundingClientRect().width || W;
+    DPR = Math.min(3, Math.max(1, (window.devicePixelRatio || 1) * (cssW / W)));
+    canvas.width  = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    // 全屏时机台由高度决定宽度，HUD 跟着它对齐，否则宽屏上会被拉成一条
+    hudEl.style.width = document.body.classList.contains("immersive")
+      ? Math.round(cssW) + "px" : "";
+  }
+  resizeCanvas();
   const SEA_Y   = 210;                          // 水面
   const FLOOR_Y = H - 34;                       // 海底
   const TOP     = SEA_Y + 40;
@@ -293,6 +324,7 @@
     overBest:  document.getElementById("over-best"),
     price: document.getElementById("menu-price"),
     sound: document.getElementById("btn-sound"),
+    full:  document.getElementById("btn-full"),
     stage: document.getElementById("stage"),
     dexCount: document.getElementById("dex-count"),
     overDex:  document.getElementById("over-dex"),
@@ -1618,6 +1650,54 @@
     }
   }
 
+  // ───────────────────────── 全屏 ─────────────────────────
+  /* iOS 的 iPhone Safari 至今不给普通元素全屏，所以 API 不可用或被拒时
+     退回「沉浸模式」：收起标题和说明，机台顶满可视高度 —— 观感上接近全屏。 */
+  let manualIm = false;
+
+  const isFs = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+
+  function syncImmersive() {
+    const on = isFs() || manualIm;
+    document.body.classList.toggle("immersive", on);
+    el.full.textContent = on ? "⤢" : "⛶";
+    el.full.title = on ? "退出全屏（F / Esc）" : "全屏（F）";
+    resizeCanvas();                                  // 尺寸变了就重算内部分辨率，别被拉虚
+  }
+
+  async function toggleFullscreen() {
+    try {
+      if (isFs()) {
+        await (document.exitFullscreen ? document.exitFullscreen()
+             : document.webkitExitFullscreen && document.webkitExitFullscreen());
+        manualIm = false;
+      } else {
+        const root = document.documentElement;
+        const req = root.requestFullscreen || root.webkitRequestFullscreen;
+        if (req) {
+          await req.call(root);
+          try { await screen.orientation.lock("portrait"); } catch (_) {}   // 竖屏游戏，能锁就锁
+        } else {
+          manualIm = true;                           // 不支持全屏 API
+        }
+      }
+    } catch (_) {
+      manualIm = !manualIm;                          // 被拒（iOS / 权限）就用沉浸模式
+    }
+    syncImmersive();
+  }
+
+  el.full.addEventListener("click", e => { e.stopPropagation(); toggleFullscreen(); });
+  document.addEventListener("fullscreenchange", syncImmersive);
+  document.addEventListener("webkitfullscreenchange", syncImmersive);
+
+  let resizePending = false;                         // 窗口尺寸变化后重算一次
+  window.addEventListener("resize", () => {
+    if (resizePending) return;
+    resizePending = true;
+    requestAnimationFrame(() => { resizePending = false; resizeCanvas(); });
+  });
+
   // ───────────────────────── 输入 ─────────────────────────
   const canvasX = clientX => {
     const r = canvas.getBoundingClientRect();
@@ -1660,6 +1740,12 @@
     el.sound.textContent = soundOn ? "🔊" : "🔇";
   });
   window.addEventListener("keydown", e => {
+    if (e.key === "f" || e.key === "F") {            // F 切全屏
+      if (document.activeElement && document.activeElement.tagName === "INPUT") return;
+      e.preventDefault();
+      toggleFullscreen();
+      return;
+    }
     if (e.code !== "Space" && e.code !== "Enter") return;
     e.preventDefault();
     state === "playing" ? cast(hook.x + rand(-120, 120)) : requestStart();
