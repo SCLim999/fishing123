@@ -1704,6 +1704,8 @@
     let url  = el.mpUrl.value.trim();
     const room = (el.mpRoom.value.trim() || "LOBBY").toUpperCase();
     if (!url) { netNote(t("net_need_url"), "err"); return; }
+    // wrangler deploy 打印的是 https:// 地址，直接粘贴要能用 —— 先把协议换成 WebSocket 的
+    url = url.replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://");
     if (!/^wss?:\/\//i.test(url)) url = "wss://" + url.replace(/^\/+/, "");
     url = url.replace(/\/+$/, "");
     if (!/\/room$/.test(url)) url += "/room";

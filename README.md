@@ -44,10 +44,58 @@
 
 和朋友在**同一片海里抢鱼** —— 鱼被谁先钩到就归谁，右上角实时比分，一局结束按分数排名。
 
-1. 部署一台联机服务器（Cloudflare Worker，约 5 分钟）：见 [`worker/README.md`](worker/README.md)。
-2. 在开始画面填一次「联机服务器」地址和昵称，输入房间码，点 **联机开钓**（都会记住）。
-3. 或者直接把带参数的链接发给朋友，点开就进同一个房间：
-   `?server=wss://<你的-worker>.workers.dev&room=ABCD`
+### 一次性准备：部署联机服务器（约 5 分钟，需要一台装了 Node 的电脑）
+
+```bash
+git clone https://github.com/SCLim999/fishing123
+cd fishing123/worker
+npx wrangler login       # 浏览器里授权 Cloudflare 账号（没有就现注册，免费）
+npx wrangler deploy
+```
+
+最后会打印出地址，例如：
+
+```
+https://treasure-cove-mp.你的子域.workers.dev
+```
+
+浏览器打开它，看到一行中文提示就说明服务器活着。**这一步只做一次**，之后一直可用。
+
+### 每次一起玩
+
+**做法 A：发链接（最省事）**
+
+把这样的链接发给朋友，各自点开就在同一个房间：
+
+```
+https://sclim999.github.io/fishing123/?server=https://treasure-cove-mp.你的子域.workers.dev&room=ABCD&name=Ann
+```
+
+- `server=` 填你部署得到的地址（`https://` 或 `wss://` 都行，游戏会自动转成 `wss://…/room`）
+- `room=` **必须一样**，随便起，例如 `ABCD`
+- `name=` 各人不同，就是比分板上的昵称
+- 想只看不钓，加 `&spec=1`
+
+**做法 B：手填**
+
+打开 https://sclim999.github.io/fishing123/ →「联机服务器」填部署地址、填昵称、填同一个房间码 → 点 **联机开钓**。地址和昵称会记住，下次只填房间码。
+
+进去后**任何人点一下画面就开局**，第一个点的人决定这局多长（30 / 60 / 120 秒）。
+
+### 只想在同一个 WiFi 下玩（不用 Cloudflare）
+
+用仓库里自带的本地服务器：
+
+```bash
+npm install ws
+node server/local.mjs              # ws://<本机IP>:8787
+python3 -m http.server 8000        # 另开一个终端，在仓库根目录
+```
+
+手机 / 别的电脑打开 `http://<本机IP>:8000/?server=http://<本机IP>:8787&room=ABCD&name=Bob`。
+
+> ⚠️ 这里游戏页面要走 **http**（本机那个 8000），不能用 GitHub Pages 的 https —— 浏览器会拦掉
+> https 页面里的 `ws://` 明文连接（混合内容）。
 
 分工：**服务器管世界**（出什么鱼、在哪、归谁、分数、计时、FEVER），
 **客户端管手感**（鱼怎么游、钩子怎么动）。鱼的移动不走网络 —— 出生时把
