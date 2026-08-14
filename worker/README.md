@@ -23,6 +23,27 @@ https://treasure-cove-mp.<你的子域>.workers.dev
 
 想验证服务器活着，直接用浏览器打开那个地址，应该看到一行中文提示。
 
+> Cloudflare 网页后台（Workers & Pages 那一页）**只是用来看的** —— 请求数、日志、额度。
+> 部署得靠上面这两条命令，后台的「Create application」建不出这个 Worker：
+> 它需要仓库里的代码，还需要一个 Durable Object 绑定。
+
+## 没有电脑时（在后台的在线编辑器里粘贴部署）
+
+只有手机、装不了 Node 的话，可以走这条路 —— 比命令行麻烦得多，能用电脑就别走这条。
+
+仓库里的 `worker/bundled.js` 是**打包成单个文件**的同一份服务器（`worker/index.js` 加
+`server/room.mjs` 合在一起，没有 import），就是给这种情况准备的：
+
+1. 后台 **Workers & Pages → Create application → Create Worker**，起个名字，先部署那个默认的 Hello World。
+2. 进去点 **Edit code**，把编辑器里的内容全删掉，粘贴 `worker/bundled.js` 的全部内容，保存部署。
+3. 这时访问它会报错，因为还差绑定 —— 到 **Settings → Bindings → Add → Durable Object**，
+   变量名填 `ROOMS`，类名选 / 填 `FishingRoom`。
+4. 再打开一次 Worker 地址，看到那行中文提示就成了。
+
+第 3 步是这条路最容易卡住的地方：Durable Object 命名空间要用**免费方案的 SQLite 后端**，
+后台 UI 各版本给的入口不太一样，卡住了就换命令行 —— `npx wrangler deploy` 会把这些
+（绑定 + migration）一次配好，因为 `wrangler.toml` 里已经写好了。
+
 ## 邀请朋友
 
 链接里可以直接带上服务器和房间码，对方点开就进同一片海：
