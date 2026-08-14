@@ -217,7 +217,9 @@
       <div class="dex-head"><span data-i18n="dex_label">图鉴</span> <b id="dex-count">0 / 15</b>　<span style="opacity:.7" data-i18n="dex_hint">钓到过的会亮起来</span></div>
       <div class="seg" id="seg-dur"><span data-i18n="seg_dur">局时</span>
         <button data-d="30">30s</button><button data-d="60">60s</button><button data-d="120">120s</button>
+        <button id="btn-daily" data-i18n="daily_btn">每日挑战</button>
       </div>
+      <div class="mp-note" id="daily-note" style="display:none"></div>
       <div class="price wide" id="menu-price"></div>
       <div class="rank" id="menu-rank"></div>
       <button class="cta" id="btn-start" data-i18n="btn_start">单人开钓</button>
@@ -343,6 +345,12 @@
       mp_alone:"房间里只有你。点一下再来一局。", you:"（你）",
       pop_empty:"空钩…", pop_chain:"串钩 ×{n}！", pop_string:"{n} 连串 +{t}",
       pop_boss:"巨兽上钩！慢慢拉！", pop_rare:"深海稀客！",
+      qte_tip:"连点！卡在绿区里加速收线", qte_good:"拉得好！", qte_miss:"手滑了…",
+      daily_btn:"每日挑战", daily_on:"每日挑战 · {date}",
+      daily_note:"全世界今天是同一片海（同样的鱼群、天色、任务）—— 比分数。局时固定 60s。",
+      daily_best:"今日最佳 {n}（第 {p} 次）", daily_none:"今天还没挑战过",
+      share_daily:"每日挑战 {date}",
+      sc_day:"☀️ 晴天", sc_dusk:"🌇 黄昏", sc_night:"🌙 夜钓　只有会发光的看得清", sc_storm:"⛈️ 暴风雨　船摇得厉害",
       pop_stolen:"被抢走了！", pop_won:"抢到了！", pop_boss_spawn:"深海巨兽出现！",
       pop_fever:"FEVER！得分 ×1.5", hud_fever:"FEVER ×1.5", hud_combo:"连击 ×{c}　得分 ×{m}",
       pop_dex:"图鉴 +1　{name}", pop_mission:"任务完成！{text}　+{r}",
@@ -389,6 +397,12 @@
       mp_alone:"You are alone in the room. Click to play again.", you:" (you)",
       pop_empty:"Empty hook…", pop_chain:"Chain ×{n}!", pop_string:"{n} in one haul +{t}",
       pop_boss:"Beast hooked! Reel slowly!", pop_rare:"Deep-sea rarity!",
+      qte_tip:"Tap in the green to reel faster", qte_good:"Nice pull!", qte_miss:"Slipped…",
+      daily_btn:"Daily", daily_on:"Daily challenge · {date}",
+      daily_note:"Everyone gets the same sea today — same fish, weather and missions. Fixed 60s round.",
+      daily_best:"Today's best {n} (run {p})", daily_none:"Not played today yet",
+      share_daily:"Daily {date}",
+      sc_day:"☀️ Clear", sc_dusk:"🌇 Dusk", sc_night:"🌙 Night dive　only glowing things show", sc_storm:"⛈️ Storm　the boat is rocking",
       pop_stolen:"Snatched away!", pop_won:"Got it first!", pop_boss_spawn:"A deep-sea beast appears!",
       pop_fever:"FEVER! Score ×1.5", hud_fever:"FEVER ×1.5", hud_combo:"Combo ×{c}　Score ×{m}",
       pop_dex:"Bestiary +1　{name}", pop_mission:"Mission done! {text}　+{r}",
@@ -436,6 +450,13 @@
   const BEST_KEY  = "treasureCove.best.v3";      // 分档存：30/60/120 各自一个最高分
   const RANK_KEY  = "treasureCove.ranks.v1";     // 本地排行榜
   const SEEN_KEY  = "treasureCove.seen.v1";      // 图鉴：钓到过哪些
+  const DAILY_KEY = "treasureCove.daily.v1";     // 每日挑战：当天最佳与次数
+  let daily = false;                             // 是否处于每日挑战
+  let dailyRec = { date: "", best: 0, plays: 0 };
+  try {
+    const d = JSON.parse(localStorage.getItem(DAILY_KEY) || "null");
+    if (d && d.date) dailyRec = d;
+  } catch (_) {}
 
   /* 目标图鉴
      score 分数 / pull 收线速度(px/s，越慢越难拉) / depth 出现深度(0=水面 1=海底)
@@ -510,7 +531,7 @@
           const d  = new Date(r.at);
           const day = `${d.getMonth() + 1}/${d.getDate()}`;
           return `<span class="${me}">${["🥇","🥈","🥉"][i] || (i + 1) + "."}</span>` +
-                 `<span class="${me}">${day}${r.mode === "mp" ? t("mode_mp") : ""}</span>` +
+                 `<span class="${me}">${day}${r.mode === "mp" ? t("mode_mp") : r.mode === "daily" ? " · ⭐" : ""}</span>` +
                  `<span class="r-sc${me}">${r.sc}</span>`;
         }).join("")
       : `<span>—</span><span>${t("rank_empty")}</span><span class="r-sc">0</span>`);
@@ -559,6 +580,8 @@
     overRank: document.getElementById("over-rank"),
     share: document.getElementById("btn-share"),
     mpSpec: document.getElementById("mp-spec"),
+    daily: document.getElementById("btn-daily"),
+    dailyNote: document.getElementById("daily-note"),
     lang:  document.getElementById("btn-lang"),
     stage: document.getElementById("stage"),
     dexCount: document.getElementById("dex-count"),
@@ -583,7 +606,27 @@
   }
   renderDex();
 
-  const rand  = (a, b) => a + Math.random() * (b - a);
+  const rand  = (a, b) => a + Math.random() * (b - a);       // 装饰用（气泡、水花、抖动）
+
+  /* 世界随机单独一条流：出什么鱼、在哪、多久出一个、任务、天色都走 grand() / gRnd()。
+     每日挑战时把它换成按日期播种的伪随机 —— 同一天所有人就是同一片海。
+     装饰性的随机不能混进这条流，否则两台机器帧数一差，鱼群就跑偏了。 */
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  let gRnd = Math.random;
+  const grand = (a, b) => a + gRnd() * (b - a);
+  const todayKey = () => new Date().toISOString().slice(0, 10);
+  function seedFromString(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
   const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
   const comboMult = () => Math.min(2, 1 + combo * 0.1);
 
@@ -611,22 +654,22 @@
   // ───────────────────────── 生成 ─────────────────────────
   function spawn(id) {
     const k   = KINDS[id];
-    const dir = Math.random() < 0.5 ? 1 : -1;
+    const dir = gRnd() < 0.5 ? 1 : -1;
     const sp  = { coin:[12,28], swim:[24,64], drift:[6,14], paddle:[16,28],
                   jet:[26,46], crawl:[26,44], rise:[8,16] }[k.move] || [20, 50];
     const it = {
       id, kind:k, dir,
       x: dir === 1 ? -k.hw * 2 : W + k.hw * 2,
-      y: k.move === "crawl" ? FLOOR_Y - 14 : TOP + rand(k.depth[0], k.depth[1]) * SPAN,
-      vx: rand(sp[0], sp[1]) * dir,
+      y: k.move === "crawl" ? FLOOR_Y - 14 : TOP + grand(k.depth[0], k.depth[1]) * SPAN,
+      vx: grand(sp[0], sp[1]) * dir,
       wob: Math.random() * Math.PI * 2,
       t: 0,
       // 会游出画面的自然离场；漂着不动的给个寿命，免得海里越堆越满
-      life: ["coin", "drift", "rise", "crawl"].includes(k.move) ? rand(13, 20) : Infinity,
+      life: ["coin", "drift", "rise", "crawl"].includes(k.move) ? grand(13, 20) : Infinity,
       dart: 0,
     };
     // 小鱼常常成群出现
-    if ((id === "small" || id === "clown") && Math.random() < 0.55) {
+    if ((id === "small" || id === "clown") && gRnd() < 0.55) {
       for (let i = 1; i <= 2; i++) {
         items.push(Object.assign({}, it, {
           x: it.x - it.dir * i * rand(34, 52),
@@ -640,7 +683,7 @@
   }
 
   function spawnRandom() {
-    let r = Math.random() * POOL_TOTAL, id = POOL[0];
+    let r = gRnd() * POOL_TOTAL, id = POOL[0];
     for (const k of POOL) { if ((r -= KINDS[k].w) <= 0) { id = k; break; } }
     spawn(id);
   }
@@ -654,20 +697,40 @@
   }
 
   // ───────────────────────── 一局 ─────────────────────────
+  function setScene(id) {
+    scene = SCENES[id] ? id : "day";
+    boltT = 0; boltNext = rand(3, 8);
+    buildBackground();                             // 配色变了，背景要重烘
+  }
+
+  function pickScene() {
+    const total = SCENE_IDS.reduce((a, k) => a + SCENES[k].w, 0);
+    let r = grand(0, total);
+    for (const k of SCENE_IDS) { if ((r -= SCENES[k].w) <= 0) return k; }
+    return "day";
+  }
+
   function resetGame() {
     score = 0; timeLeft = roundTime; combo = 0; caught = {}; earned = {}; newSeen = [];
     items = []; pops = []; sparks = [];
     hook = { state:"idle", x:W/2, y:SEA_Y, catches:[], pull:0 };
-    spawnTimer = 0; chestTimer = rand(4, 7); bossTimer = rand(15, 25);
+    // 每日挑战：整局世界都从今天的日期播种；平时用真随机
+    gRnd = daily ? mulberry32(seedFromString("treasureCove-" + todayKey())) : Math.random;
+    spawnTimer = 0; chestTimer = grand(4, 7); bossTimer = grand(15, 25);
     bonusGiven = 0; fever = false;
     rollMissions();
+    if (!online) { setScene(pickScene()); announceScene(); }
     el.stage.classList.remove("fever");
     for (let i = 0, n = Math.round(14 * widthScale()); i < n; i++) {   // 开局就有一片鱼群
       spawnRandom();
       const it = items[items.length - 1];
-      it.x = rand(30, W - 30);
+      it.x = grand(30, W - 30);
     }
     syncHud();
+  }
+
+  function announceScene() {
+    if (scene !== "day") pop(W / 2, SEA_Y + 120, t("sc_" + scene), "#cfe6f2", 20);
   }
 
   function startGame() {
@@ -712,7 +775,11 @@
     if (score > best) { best = score; bests[roundTime] = best; saveBests(); }
     el.best.textContent = best;
     const entry = { sc: score, at: Date.now() };
-    if (score > 0) { recordScore(score, "solo"); entry.at = ranks.find(x => x.sc === score)?.at || entry.at; }
+    if (score > 0) {
+      recordScore(score, daily ? "daily" : "solo");
+      entry.at = ranks.find(x => x.sc === score)?.at || entry.at;
+    }
+    if (daily) { saveDaily(score); refreshDaily(); }
     paintSoloResults(entry);
     renderDex();
     repaintResults = () => paintSoloResults(entry);
@@ -759,7 +826,7 @@
     const pool = MISSIONS.slice();
     missions = [];
     for (let i = 0; i < 3 && pool.length; i++) {
-      const m = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+      const m = pool.splice(Math.floor(gRnd() * pool.length), 1)[0];
       missions.push({ def: m, prog: 0, done: false });
     }
     mineHits = 0;
@@ -798,6 +865,7 @@
     hook.y = SEA_Y;
     hook.state = "down";
     hook.catches = [];
+    struggle = null;
     splash(hook.x, SEA_Y, 9, "#cdeeff");
     beep(760, 0.07, "square", 0.03);
   }
@@ -805,6 +873,44 @@
   function reel() {
     hook.state = "up";
     hook.pull  = pullSpeed();
+  }
+
+  function startStruggle(it) {
+    struggle = {
+      pos: 0.5, dir: Math.random() < 0.5 ? 1 : -1,
+      speed: 0.5 + it.kind.score / 2200,           // 越值钱指针跑越快
+      zone: 0.17, boost: 0, stall: 0, hits: 0,
+      name: kindName(it.id),
+    };
+    pop(hook.x, hook.y - 74, t("qte_tip"), "#9be7ff", 18);
+  }
+
+  function tapStruggle() {
+    const g = struggle;
+    if (!g) return;
+    if (Math.abs(g.pos - 0.5) <= g.zone) {          // 命中绿区
+      g.hits++;
+      g.boost = 0.8;
+      g.zone  = Math.max(0.07, g.zone - 0.02);      // 越拉越难
+      g.speed += 0.08;
+      pop(hook.x, hook.y - 50, t("qte_good"), "#8bf5a8", 19);
+      beep(660 + Math.min(6, g.hits) * 90, 0.09, "square", 0.04);
+    } else {
+      g.stall = 0.5;
+      pop(hook.x, hook.y - 50, t("qte_miss"), "#ff9f6b", 18);
+      beep(200, 0.12, "square", 0.035);
+    }
+  }
+
+  function stepStruggle(dt) {
+    const g = struggle;
+    if (!g) return 1;
+    g.boost = Math.max(0, g.boost - dt);
+    g.stall = Math.max(0, g.stall - dt);
+    g.pos  += g.dir * g.speed * dt;
+    if (g.pos > 1) { g.pos = 1; g.dir = -1; }
+    if (g.pos < 0) { g.pos = 0; g.dir = 1; }
+    return g.boost > 0 ? 2.3 : g.stall > 0 ? 0.35 : 1;   // 收线速度倍率
   }
 
   // 空钩拉得飞快；挂上东西后取最难拉的那个，每多挂一个再慢一档
@@ -842,6 +948,7 @@
     hook.pull = pullSpeed();                       // 越串越沉
     const n = hook.catches.length;
     beep(hit.kind.score >= 400 ? 990 : 430 + n * 70, 0.1, "square", 0.04);
+    if (!spectating && hit.kind.score >= 400) startStruggle(hit);
     if (hit.id === "boss")   pop(hook.x, hook.y - 60, t("pop_boss"), "#ff9f6b", 20);
     if (hit.id === "angler") pop(hook.x, hook.y - 50, t("pop_rare"), "#ffe07a", 19);
     if (n >= 2) pop(hook.x, hook.y - 34, t("pop_chain", { n }), "#ffd24a", 19);
@@ -883,6 +990,7 @@
       }
       hook.catches = [];
       hook.state   = "idle";
+      struggle     = null;
       return;
     }
     if (!list.length) {
@@ -939,6 +1047,7 @@
     }
     hook.catches = [];
     hook.state   = "idle";
+    struggle     = null;
     syncHud();
   }
 
@@ -983,7 +1092,7 @@
 
   function update(dt) {
     waveT += dt;
-    bob = Math.sin(waveT * 1.5) * 5;
+    bob = Math.sin(waveT * 1.5) * 5 * ((SCENES[scene] || SCENES.day).bob || 1);
 
     ship.x    = W / 2 + Math.sin(waveT * 0.3) * (W * 0.24);
     ship.tipX = ship.x + 62;
@@ -1036,20 +1145,20 @@
       if (items.length < maxItems()) spawnRandom();
       if (fever && items.length < maxItems()) spawnRandom();   // 冲刺时鱼群加倍涌入
       // 海面越宽，出鱼越密，密度才和标准宽度一致
-      spawnTimer = (fever ? rand(0.22, 0.45) : rand(0.45, 0.9)) / widthScale();
+      spawnTimer = (fever ? grand(0.22, 0.45) : grand(0.45, 0.9)) / widthScale();
     }
     chestTimer -= dt;
     if (chestTimer <= 0) {
       spawn("chest");
       beep(360, 0.2, "triangle", 0.045);
-      chestTimer = fever ? rand(4, 7) : rand(9, 15);
+      chestTimer = fever ? grand(4, 7) : grand(9, 15);
     }
     bossTimer -= dt;
     if (bossTimer <= 0 && !items.some(i => i.id === "boss")) {
       spawn("boss");
       pop(W / 2, SEA_Y + 60, t("pop_boss_spawn"), "#ff9f6b");
       beep(90, 0.55, "sawtooth", 0.06);
-      bossTimer = fever ? rand(12, 20) : rand(22, 34);
+      bossTimer = fever ? grand(12, 20) : grand(22, 34);
     }
 
     moveHook(dt);
@@ -1066,7 +1175,7 @@
         reel();
       }
     } else if (hook.state === "up") {
-      hook.y -= hook.pull * dt;
+      hook.y -= hook.pull * stepStruggle(dt) * dt;
       tryHook();                                   // 收线途中撞到的一起串上来
       layChain();
       if (hook.y <= SEA_Y) { hook.y = SEA_Y; land(); }
@@ -1082,11 +1191,19 @@
   const bgCtx    = bgCanvas.getContext("2d");
 
   function paintStatic(g) {
+    const SC = SCENES[scene] || SCENES.day;
     const sky = g.createLinearGradient(0, 0, 0, SEA_Y);
-    sky.addColorStop(0, "#8fd8f2"); sky.addColorStop(1, "#d9f2fb");
+    sky.addColorStop(0, SC.sky[0]); sky.addColorStop(1, SC.sky[1]);
     g.fillStyle = sky; g.fillRect(0, 0, W, SEA_Y);
 
-    g.fillStyle = "rgba(255,255,255,.75)";
+    if (scene === "night") {                        // 夜里加点星星
+      g.fillStyle = "rgba(255,255,255,.7)";
+      for (let i = 0; i < Math.round(W / 26); i++) {
+        const x = ((i * 97) % W) + (i % 5) * 7, y = 12 + ((i * 53) % (SEA_Y - 60));
+        g.fillRect(x, y, i % 4 ? 2 : 3, i % 4 ? 2 : 3);
+      }
+    }
+    g.fillStyle = SC.cloud;
     // 云按宽度铺开，数量也跟着长，否则加宽后天空一片空
     const clouds = [];
     for (let i = 0, n = Math.max(3, Math.round(W / 420)); i < n; i++) {
@@ -1106,11 +1223,15 @@
     g.closePath(); g.fill();
 
     const sea = g.createLinearGradient(0, SEA_Y, 0, H);
-    sea.addColorStop(0, "#1d8fc4"); sea.addColorStop(0.4, "#0e6395"); sea.addColorStop(1, "#03203a");
+    sea.addColorStop(0, SC.sea[0]); sea.addColorStop(0.4, SC.sea[1]); sea.addColorStop(1, SC.sea[2]);
     g.fillStyle = sea; g.fillRect(0, SEA_Y, W, H - SEA_Y);
+    if (SC.dark) {                                  // 夜色直接烘进背景，别每帧铺一遍
+      g.fillStyle = `rgba(2,10,20,${SC.dark})`;
+      g.fillRect(0, SEA_Y, W, H - SEA_Y);
+    }
 
     g.save();                                                  // 阳光光柱
-    g.globalAlpha = 0.07; g.fillStyle = "#dff4ff";
+    g.globalAlpha = SC.ray; g.fillStyle = "#dff4ff";
     for (let i = 0, n = Math.max(4, Math.round(W / 150)); i < n; i++) {
       const x = 60 + i * 150;
       g.beginPath();
@@ -1132,6 +1253,64 @@
     bgCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
     bgCtx.clearRect(0, 0, W, H);
     paintStatic(bgCtx);
+  }
+
+  /* 夜里的提灯。原来是每帧铺一整片径向渐变，1920 全屏下要 23ms（43fps）——
+     换成「按物件」而不是「按像素」：暗色烘进背景（见 paintStatic），
+     远处的鱼在 drawItem 里按距离降透明度（47 次乘法），
+     钩子上再叠一张缓存好的光晕贴图。 */
+  const LAMP_R = 150;
+  const lampCanvas = document.createElement("canvas");
+  (function bakeLamp() {
+    lampCanvas.width = lampCanvas.height = LAMP_R * 2;
+    const g = lampCanvas.getContext("2d");
+    const rg = g.createRadialGradient(LAMP_R, LAMP_R, 8, LAMP_R, LAMP_R, LAMP_R);
+    rg.addColorStop(0,   "rgba(255,236,170,.55)");
+    rg.addColorStop(0.45,"rgba(255,226,150,.18)");
+    rg.addColorStop(1,   "rgba(255,220,140,0)");
+    g.fillStyle = rg;
+    g.fillRect(0, 0, LAMP_R * 2, LAMP_R * 2);
+  })();
+
+  function drawLamp() {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.drawImage(lampCanvas, hook.x - LAMP_R, hook.y - LAMP_R, LAMP_R * 2, LAMP_R * 2);
+    ctx.restore();
+  }
+
+  // 夜里离提灯越远越看不清（标签不受影响，否则没法玩）
+  function nightAlpha(it) {
+    if (!SCENES[scene].dark) return 1;
+    const dx = it.x - hook.x, dy = it.y - hook.y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    return clamp(1 - (d - LAMP_R * 0.8) / 520, 0.22, 1);
+  }
+
+  function drawWeather(dt) {
+    const SC = SCENES[scene];
+    if (SC.rain) {
+      ctx.strokeStyle = "rgba(200,225,240,.35)"; ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      for (let i = 0, n = Math.round(W / 7); i < n; i++) {
+        const x = (i * 137 + (waveT * 900) % W) % W;
+        const y = (i * 211 + waveT * 1500) % (SEA_Y + 40);
+        ctx.moveTo(x, y); ctx.lineTo(x - 5, y + 16);
+      }
+      ctx.stroke();
+    }
+    if (SC.bolt) {                                  // 偶尔一道闪电
+      boltNext -= dt;
+      if (boltNext <= 0) {
+        boltT = 0.22; boltNext = rand(4, 11);
+        beep(70, 0.5, "sawtooth", 0.05);
+      }
+      if (boltT > 0) {
+        boltT = Math.max(0, boltT - dt);
+        ctx.fillStyle = `rgba(240,250,255,${boltT * 1.6})`;
+        ctx.fillRect(0, 0, W, H);
+      }
+    }
   }
 
   function drawBackground() {
@@ -1539,7 +1718,7 @@
   function drawItem(it) {
     const fading = it.life < 3 && Math.floor(it.life * 6) % 2 === 0;
     ctx.save();
-    ctx.globalAlpha = fading ? 0.4 : 1;
+    ctx.globalAlpha = (fading ? 0.4 : 1) * nightAlpha(it);
     ctx.translate(it.x, it.y);
     // 水母、金币、宝箱没有朝向；其它按游动方向翻转
     if (!["jelly", "coin", "chest", "mine", "boot"].includes(it.kind.art)) ctx.scale(it.vx >= 0 ? 1 : -1, 1);
@@ -1565,6 +1744,34 @@
     }
   }
 
+  function drawStruggle() {
+    const g  = struggle;
+    const bw = 250, bh = 16;
+    const bx = clamp(hook.x, bw / 2 + 12, W - bw / 2 - 12) - bw / 2;
+    const by = clamp(hook.y - 108, SEA_Y + 30, H - 60);
+
+    ctx.fillStyle = "rgba(3,18,32,.72)";                  // 轨道
+    pill(bx - 4, by - 4, bw + 8, bh + 8, 8); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.14)";
+    pill(bx, by, bw, bh, 6); ctx.fill();
+
+    const zx = bx + (0.5 - g.zone) * bw, zw = g.zone * 2 * bw;
+    ctx.fillStyle = g.boost > 0 ? "rgba(139,245,168,.95)" : "rgba(139,245,168,.6)";
+    pill(zx, by, zw, bh, 6); ctx.fill();                  // 绿区
+
+    const mx = bx + g.pos * bw;                           // 指针
+    ctx.fillStyle = "#ffd24a";
+    pill(mx - 3, by - 5, 6, bh + 10, 3); ctx.fill();
+
+    ctx.textAlign = "center";                             // 鱼名 + 拉了几次
+    ctx.font = "900 14px 'Segoe UI','PingFang SC',sans-serif";
+    ctx.lineWidth = 3.5; ctx.strokeStyle = "rgba(0,0,0,.65)";
+    const label = g.name + (g.hits ? `　×${g.hits}` : "");
+    ctx.strokeText(label, bx + bw / 2, by - 10);
+    ctx.fillStyle = g.boost > 0 ? "#8bf5a8" : "#e8f6ff";
+    ctx.fillText(label, bx + bw / 2, by - 10);
+  }
+
   function draw() {
     drawBackground();
 
@@ -1575,8 +1782,10 @@
 
     for (const it of items.slice().sort((a, b) => b.y - a.y)) drawItem(it);   // 深的先画
     for (const c of hook.catches) drawItem(c);
+    if (SCENES[scene].dark) drawLamp();
     drawLabels();
 
+    if (struggle) drawStruggle();
     if (!spectating) { drawShip(); drawLine(); }
     if (online) drawRemotes();
     if (spectating) {
@@ -1593,6 +1802,8 @@
       ctx.fillRect(s.x, s.y, 3, 3);
       ctx.globalAlpha = 1;
     }
+
+    drawWeather(lastDt);
 
     ctx.textAlign = "center";
     for (const p of pops) {
@@ -1620,6 +1831,13 @@
         ctx.fillStyle = `rgba(255,196,90,${0.85 + Math.sin(waveT * 7) * 0.15})`;
         ctx.fillText(t("hud_fever"), 14, hy);
         hy += 26;
+      }
+      if (daily) {
+        ctx.font = "900 14px 'Segoe UI','PingFang SC',sans-serif";
+        ctx.lineWidth = 3.5; ctx.strokeStyle = "rgba(0,0,0,.6)";
+        const dtxt = t("daily_on", { date: todayKey() });
+        ctx.strokeText(dtxt, 14, hy); ctx.fillStyle = "#9be7ff"; ctx.fillText(dtxt, 14, hy);
+        hy += 20;
       }
       if (combo >= 2) {
         ctx.font = "900 17px 'Segoe UI','PingFang SC',sans-serif";
@@ -1677,6 +1895,25 @@
     hook.pull = pullSpeed();
   }
 
+  /* 大货拉扯：钓到 400 分以上的东西时，收线不再是干等十几秒 ——
+     指针来回跑，点在绿区里就猛拉一下，点歪了会滑一下。
+     只影响收线速度，不会把鱼弄掉，所以联机也能用（分数在钩到那刻就由服务器结算了）。 */
+  /* 每局的天色：只影响观感（配色、雨、闪电、船摇），不动任何数值 ——
+     联机时由服务器随 start 下发，保证一屋子人看到同一片天。 */
+  const SCENES = {
+    day:   { w:38, sky:["#8fd8f2","#d9f2fb"], sea:["#1d8fc4","#0e6395","#03203a"],
+             cloud:"rgba(255,255,255,.75)", ray:0.07, bob:1 },
+    dusk:  { w:20, sky:["#ff9e6b","#ffe0b5"], sea:["#2a6d92","#1b4a6b","#04182b"],
+             cloud:"rgba(255,222,196,.7)",  ray:0.05, bob:1.2 },
+    night: { w:25, sky:["#08152b","#1d3557"], sea:["#0d3550","#08243a","#010d18"],
+             cloud:"rgba(200,215,240,.32)", ray:0.03, bob:1, dark:0.58 },
+    storm: { w:17, sky:["#3f4d59","#8a9aa6"], sea:["#16607f","#0b4460","#021726"],
+             cloud:"rgba(208,218,228,.55)", ray:0.02, bob:2.3, rain:true, bolt:true },
+  };
+  const SCENE_IDS = Object.keys(SCENES);
+  let scene = "day", boltT = 0, boltNext = 5;
+
+  let struggle = null;
   let shakeT = 0;                                   // 画面震动剩余时间
   let hookReportT = 0;
   function netHookReport(dt) {                      // 10Hz 上报自己的钩子给别人看
@@ -1767,6 +2004,7 @@
         (m.items || []).forEach(netItem);
         timeLeft = m.time; fever = m.fever;
         if (m.dur) { roundTime = m.dur; renderDurSeg(); }
+        if (m.scene) setScene(m.scene);
         netNote(spectating ? t("net_spectating", { room: NET.room }) : t("net_connected", { room: NET.room }), "ok");
         el.stage.classList.toggle("fever", !!m.fever);
         if (m.state === "playing") { state = "playing"; }
@@ -1792,6 +2030,7 @@
         state = "playing";
         timeLeft = m.time; fever = false; bonusGiven = 0;
         if (m.dur) { roundTime = m.dur; renderDurSeg(); }
+        if (m.scene) { setScene(m.scene); announceScene(); }   // 联机天色由服务器统一
         el.stage.classList.remove("fever");
         NET.players = new Map((m.players || []).map(p => [p.id, p]));
         syncHud();
@@ -1979,6 +2218,7 @@
     el.lang.title  = t("t_lang");
     el.lang.textContent = lang === "zh" ? "EN" : "中";
     el.full.title = (isFs() || manualIm) ? t("t_full_exit") : t("t_full");
+    refreshDaily();                                // 每日挑战说明也要换语言
     renderDex();                                   // 图鉴里的鱼名
     renderRanks(el.menuRank);                      // 排行榜表头
     if (!el.over.classList.contains("hidden") && repaintResults) repaintResults();
@@ -2052,6 +2292,7 @@
 
   canvas.addEventListener("pointerdown", e => {
     e.preventDefault();
+    if (state === "playing" && struggle) { tapStruggle(); return; }   // 正在拉扯
     state === "playing" ? cast(canvasX(e.clientX)) : requestStart();
   });
   el.menu.addEventListener("click", startGame);
@@ -2080,10 +2321,46 @@
     syncHud();
   });
 
+  // ── 每日挑战 ──
+  function refreshDaily() {
+    if (dailyRec.date !== todayKey()) dailyRec = { date: todayKey(), best: 0, plays: 0 };
+    el.daily.classList.toggle("on", daily);
+    el.dailyNote.style.display = daily ? "" : "none";
+    if (daily) {
+      el.dailyNote.innerHTML = t("daily_note") + "<br>" +
+        (dailyRec.plays ? t("daily_best", { n: dailyRec.best, p: dailyRec.plays }) : t("daily_none"));
+    }
+    [...el.segDur.querySelectorAll("button[data-d]")].forEach(b => {
+      b.disabled = daily;                          // 每日挑战固定 60s
+      b.style.opacity = daily ? .4 : 1;
+    });
+  }
+
+  el.daily.addEventListener("click", e => {
+    e.stopPropagation();
+    daily = !daily;
+    if (daily) {                                   // 固定 60s，成绩才有可比性
+      roundTime = 60;
+      try { localStorage.setItem(DUR_KEY, "60"); } catch (_) {}
+      best = bestOf(60); el.best.textContent = best;
+      timeLeft = 60; renderDurSeg(); renderRanks(el.menuRank);
+    }
+    refreshDaily();
+    syncHud();
+  });
+
+  function saveDaily(sc) {
+    if (dailyRec.date !== todayKey()) dailyRec = { date: todayKey(), best: 0, plays: 0 };
+    dailyRec.plays++;
+    if (sc > dailyRec.best) dailyRec.best = sc;
+    try { localStorage.setItem(DAILY_KEY, JSON.stringify(dailyRec)); } catch (_) {}
+  }
+
   // ── 分享成绩：能用系统分享就分享，否则复制到剪贴板 ──
   function shareText() {
     const sep = lang === "en" ? ", " : "、";
     const lines = [t("share_head", { n: score, d: roundTime, mp: online ? t("share_mp") : "" })];
+    if (daily) lines.push(t("share_daily", { date: todayKey() }));
     const got = Object.keys(KINDS).filter(k => caught[k]);
     if (got.length) {
       lines.push(t("share_catch") + got.map(k => `${kindName(k)}×${caught[k]}`).join(sep));
@@ -2147,14 +2424,15 @@
     }
     if (e.code !== "Space" && e.code !== "Enter") return;
     e.preventDefault();
+    if (state === "playing" && struggle) { tapStruggle(); return; }
     state === "playing" ? cast(hook.x + rand(-120, 120)) : requestStart();
   });
 
   // ───────────────────────── 主循环 ─────────────────────────
-  let last = performance.now();
+  let last = performance.now(), lastDt = 0.016;
   function loop(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
-    last = now;
+    last = now; lastDt = dt;
     update(dt);
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);        // 逻辑坐标 → 物理像素
     if (shakeT > 0) {                              // 水雷炸一下
@@ -2168,6 +2446,7 @@
 
   resizeCanvas();                    // 放这里：它要读 online / items，那些在上面是 let 声明
   applyLang();
+  refreshDaily();
   renderDurSeg();
   resetGame();                       // 菜单背景也有鱼在游
   requestAnimationFrame(loop);

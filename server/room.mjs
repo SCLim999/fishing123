@@ -19,6 +19,8 @@ export const FEVER_MULT = 1.5;
 export const feverAt  = dur => Math.min(20, Math.max(10, Math.round(dur * 0.33)));
 export const bonusCap = dur => Math.round(dur * 0.42);
 export const OVER_HOLD  = 8;      // 结算停留几秒后回到大厅
+// 天色由服务器定，一屋子人才看到同一片天（权重要和客户端 SCENES 一致）
+export const SCENE_W = { day:38, dusk:20, night:25, storm:17 };
 const MAX_ITEMS = 26;
 const MAX_CHAIN = 8;
 
@@ -52,6 +54,14 @@ const SPEED = { coin:[12,28], swim:[24,64], drift:[6,14], paddle:[16,28],
 const POOL = Object.keys(SPEC).filter(k => SPEC[k].w > 0);
 const POOL_TOTAL = POOL.reduce((s, k) => s + SPEC[k].w, 0);
 
+function pickScene() {
+  const ids = Object.keys(SCENE_W);
+  const total = ids.reduce((a, k) => a + SCENE_W[k], 0);
+  let r = Math.random() * total;
+  for (const k of ids) { if ((r -= SCENE_W[k]) <= 0) return k; }
+  return "day";
+}
+
 const timeBonus = score => score >= 400 ? 3 : score >= 150 ? 2 : score >= 60 ? 1 : 0;
 const rand  = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -67,6 +77,7 @@ export class Room {
     this.nextId  = 1;
     this.state   = "lobby";        // lobby | playing | over
     this.roundTime = GAME_TIME;    // 本局时长（30 / 60 / 120）
+    this.scene = "day";            // 本局天色
     this.timeLeft = GAME_TIME;
     this.fever = false;
     this.bonusGiven = 0;
@@ -105,7 +116,7 @@ export class Room {
                 spec: !!spec, hook: { x: W / 2, y: SEA_Y, st: "idle", n: 0 } };
     this.players.set(id, p);
     this.sendTo(id, { t: "welcome", you: id, state: this.state, time: Math.ceil(this.timeLeft),
-                      fever: this.fever, dur: this.roundTime, spec: p.spec,
+                      fever: this.fever, dur: this.roundTime, scene: this.scene, spec: p.spec,
                       players: this.playerList(), items: this.itemList(), specs: this.specCount() });
     this.broadcast({ t: "joined", p: { id: p.id, name: p.name, score: 0, spec: p.spec },
                      specs: this.specCount() }, id);
@@ -179,10 +190,11 @@ export class Room {
   // ───────────────────────── 一局 ─────────────────────────
   startRound(dur) {
     this.roundTime = DURATIONS.includes(+dur) ? +dur : GAME_TIME;
+    this.scene = pickScene();
     this.reset("playing");
     for (const p of this.players.values()) { p.score = 0; p.combo = 0; }
     this.broadcast({ t: "start", time: this.roundTime, dur: this.roundTime,
-                     players: this.playerList() });
+                     scene: this.scene, players: this.playerList() });
     for (let i = 0; i < 12; i++) this.spawnOne(true);   // 开局先铺一片鱼
     this.flushSpawns();
   }
