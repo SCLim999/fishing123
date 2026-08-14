@@ -91,22 +91,30 @@ https://treasure-cove-mp.你的子域.workers.dev
 
 ### 每次一起玩
 
+服务器地址**已经内置**（`index.html` 里的 `DEFAULT_SERVER`），所以「联机服务器」那一栏
+打开就是填好的，一般不用管它。取值优先级：链接里的 `?server=` > 浏览器记住的 > 内置默认值。
+
 **做法 A：发链接（最省事）**
 
-把这样的链接发给朋友，各自点开就在同一个房间：
+只要带房间码，对方点开就直接进房：
 
 ```
-https://sclim999.github.io/fishing123/?server=https://treasure-cove-mp.你的子域.workers.dev&room=ABCD&name=Ann
+https://sclim999.github.io/fishing123/?room=ABCD&name=Ann
 ```
 
-- `server=` 填你部署得到的地址（`https://` 或 `wss://` 都行，游戏会自动转成 `wss://…/room`）
 - `room=` **必须一样**，随便起，例如 `ABCD`
 - `name=` 各人不同，就是比分板上的昵称
 - 想只看不钓，加 `&spec=1`
+- 想用别的服务器就加 `&server=…`（`https://` 或 `wss://` 都行，游戏会自动转成 `wss://…/room`）
 
 **做法 B：手填**
 
-打开 https://sclim999.github.io/fishing123/ →「联机服务器」填部署地址、填昵称、填同一个房间码 → 点 **联机开钓**。地址和昵称会记住，下次只填房间码。
+打开 https://sclim999.github.io/fishing123/ → 填昵称、填同一个房间码 → 点 **联机开钓**
+（服务器栏已经预填）。填过的地址和昵称都会记住。
+
+> 自己 fork 的话，把 `index.html` 里的 `DEFAULT_SERVER` 改成你 `wrangler deploy` 得到的地址
+> —— 或者留空，那就退回「必须手填」。内置的是公开地址，等于谁拿到链接都能用你的
+> Cloudflare 额度；房间之间是隔离的（房间码不同就互不干扰），但额度是共用的。
 
 进去后**任何人点一下画面就开局**，第一个点的人决定这局多长（30 / 60 / 120 秒）。
 

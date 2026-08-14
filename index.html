@@ -601,6 +601,10 @@
     send(o) { if (NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify(o)); },
   };
   const NET_KEY  = "treasureCove.server.v1";       // 记住服务器地址，省得每次填
+  /* 默认联机服务器 —— 填好了就不用每次粘地址，填个房间码就能开钓。
+     优先级：链接里的 ?server= > 浏览器记住的 > 这个默认值。
+     自己 fork 请改成你自己 `wrangler deploy` 得到的地址（或留空 = 必须手填）。 */
+  const DEFAULT_SERVER = "https://treasure-cove-mp.limcopy.workers.dev";
   const NAME_KEY = "treasureCove.name.v1";         // 记住昵称
   const PCOLORS = ["#7fd3ff", "#ffd166", "#ff9145", "#8bf5a8", "#d4699a", "#c6a2ff"];
   const pColor = id => PCOLORS[Math.abs(id | 0) % PCOLORS.length];
@@ -2977,12 +2981,13 @@
   // 记住上次的服务器地址；链接里也能带 ?server=…&room=…&name=…
   {
     const q = new URLSearchParams(location.search);
-    try { el.mpUrl.value = q.get("server") || localStorage.getItem(NET_KEY) || ""; } catch (_) {}
+    try { el.mpUrl.value = q.get("server") || localStorage.getItem(NET_KEY) || DEFAULT_SERVER; }
+    catch (_) { el.mpUrl.value = DEFAULT_SERVER; }
     try { el.mpName.value = q.get("name") || localStorage.getItem(NAME_KEY) || ""; } catch (_) {}
     if (q.get("room")) el.mpRoom.value = q.get("room").toUpperCase();
     if (q.get("spec") === "1") el.mpSpec.checked = true;   // 观战链接：…&room=ABCD&spec=1
 
-    if (q.get("server") && q.get("room")) goOnline();     // 分享链接点开就直接进房
+    if (q.get("room") && el.mpUrl.value) goOnline();      // 分享链接点开就直接进房（server 可省略）
   }
   function syncMusicBtn() {
     el.music.textContent = "🎵";
