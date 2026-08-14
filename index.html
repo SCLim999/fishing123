@@ -162,6 +162,12 @@
   .mp-note{font-size:.74rem;color:#a8c8da;line-height:1.5}
   .mp-note.err{color:#ffb1a6}
   .mp-note.ok{color:#8bf5a8}
+  #card-view{
+    position:fixed;inset:0;z-index:60;background:rgba(2,10,18,.88);cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;
+  }
+  #card-view img{max-width:96vw;max-height:78vh;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.6);cursor:default}
+  #card-view span{font-size:.86rem;color:#cfe6f2;text-align:center}
   .mp-check{display:flex;align-items:center;gap:6px;font-size:.78rem;color:#cfe6f2;cursor:pointer}
   .mp-check input{width:15px;height:15px;flex:0 0 auto}
 
@@ -363,6 +369,7 @@
       achv_list:"新成就：{list}", btn_card:"保存成绩图", card_saved:"已保存 ✓", card_shared:"已分享 ✓", t_music:"背景音乐开关",
       card_title:"宝藏海湾 · 钓鱼机", card_dex:"图鉴", card_best:"最高", card_mode_daily:"每日挑战",
       card_mode_mp:"联机", card_missions:"任务",
+      card_shown:"图已生成 ↓", card_longpress:"长按图片保存 / 右键另存为　·　点空白处关闭",
       coop_label:"合作模式（全队共用目标分）", coop_hud:"全队 {team} / {target}",
       coop_win:"🎉 达成目标！全队 {team} / {target}", coop_lose:"差一点…全队 {team} / {target}",
       ink_hit:"被泼了墨！", ink_use:"墨囊！糊他们一脸", emote_tip:"按 1~4 发表情",
@@ -426,6 +433,7 @@
       achv_list:"New: {list}", btn_card:"Save score card", card_saved:"Saved ✓", card_shared:"Shared ✓", t_music:"Music on/off",
       card_title:"Treasure Cove", card_dex:"Bestiary", card_best:"Best", card_mode_daily:"Daily",
       card_mode_mp:"Online", card_missions:"Missions",
+      card_shown:"Card ready ↓", card_longpress:"Long-press the image to save, or right-click → Save image as　·　tap outside to close",
       coop_label:"Co-op (shared team target)", coop_hud:"Team {team} / {target}",
       coop_win:"🎉 Target reached! Team {team} / {target}", coop_lose:"So close… Team {team} / {target}",
       ink_hit:"Inked!", ink_use:"Ink! Right in their faces", emote_tip:"Keys 1-4 send an emote",
@@ -2888,14 +2896,32 @@
         done(t("card_shared")); return;
       }
     } catch (_) { /* 用户取消或不支持，走下载 */ }
+    const url = URL.createObjectURL(blob);
+    if (window.self !== window.top) {                // 被嵌在别人页面里：下载会被沙箱吃掉
+      showCard(url);
+      done(t("card_shown"));
+      return;
+    }
     try {
-      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = "treasure-cove-" + todayKey() + ".png";
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
       done(t("card_saved"));
-    } catch (_) { done(t("share_failed")); }
+    } catch (_) { showCard(url); done(t("card_shown")); }
+  }
+
+  // 把成绩图铺在屏幕上，附一行「长按 / 右键另存为」，点一下关掉
+  function showCard(url) {
+    const old = document.getElementById("card-view");
+    if (old) old.remove();
+    const box = document.createElement("div");
+    box.id = "card-view";
+    box.innerHTML = `<img src="${url}" alt=""><span>${t("card_longpress")}</span>`;
+    box.addEventListener("click", e => {
+      if (e.target.tagName !== "IMG") { box.remove(); URL.revokeObjectURL(url); }
+    });
+    document.body.appendChild(box);
   }
 
   // ── 分享成绩：能用系统分享就分享，否则复制到剪贴板 ──
