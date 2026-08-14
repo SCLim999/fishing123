@@ -204,6 +204,7 @@
     <div class="board"><span class="lbl" data-i18n="lbl_score">分数</span><span class="val" id="hud-score">0</span></div>
     <div class="board"><span class="lbl" data-i18n="lbl_best">Best</span><span class="val" id="hud-best">0</span></div>
     <button class="icon-btn" id="btn-lang" title="切换语言">中/EN</button>
+    <button class="icon-btn" id="btn-music" title="背景音乐开关">🎵</button>
     <button class="icon-btn" id="btn-sound" title="音效开关">🔊</button>
     <button class="icon-btn" id="btn-full" title="全屏（F）">⛶</button>
   </div>
@@ -214,6 +215,7 @@
     <div class="overlay" id="overlay-menu">
       <div class="banner" data-i18n="banner_start">点一下就开钓！</div>
       <p data-i18n="how"></p>
+      <div class="dex-head"><span id="achv-head"></span></div>
       <div class="dex-head"><span data-i18n="dex_label">图鉴</span> <b id="dex-count">0 / 15</b>　<span style="opacity:.7" data-i18n="dex_hint">钓到过的会亮起来</span></div>
       <div class="seg" id="seg-dur"><span data-i18n="seg_dur">局时</span>
         <button data-d="30">30s</button><button data-d="60">60s</button><button data-d="120">120s</button>
@@ -233,6 +235,7 @@
           <input id="mp-url" data-ph="ph_url" autocomplete="off">
         </div>
         <label class="mp-check"><input type="checkbox" id="mp-spec"><span data-i18n="spec_label">观战模式（只看不钓）</span></label>
+        <label class="mp-check"><input type="checkbox" id="mp-coop"><span data-i18n="coop_label">合作模式（全队共用目标分）</span></label>
         <div class="mp-note" id="mp-note" data-i18n="mp_note"></div>
       </div>
     </div>
@@ -243,15 +246,17 @@
       <div class="price" id="over-players" style="display:none"></div>
       <div class="price" id="over-table"></div>
       <p id="over-miss"></p>
+      <p id="over-achv"></p>
       <p id="over-dex"></p>
       <p id="over-best"></p>
       <div class="rank" id="over-rank"></div>
       <button class="share" id="btn-share" data-i18n="btn_share">复制 / 分享成绩</button>
+      <button class="share" id="btn-card" data-i18n="btn_card">保存成绩图</button>
       <button class="cta" id="btn-again" data-i18n="btn_again">再钓一次</button>
     </div>
   </div>
 
-  <p class="tip"><span data-i18n="tip1"></span><br><span data-i18n="tip2"></span><br><span data-i18n="tip3"></span></p>
+  <p class="tip"><span data-i18n="tip1"></span><br><span data-i18n="tip2"></span><br><span data-i18n="tip3"></span>　·　<span data-i18n="emote_tip"></span></p>
 </div>
 
 <script>
@@ -260,7 +265,7 @@
 
   // ───────────────────────── 场地 ─────────────────────────
   const canvas = document.getElementById("game");
-  const ctx    = canvas.getContext("2d");
+  let   ctx    = canvas.getContext("2d");
   /* 逻辑坐标系：高度固定 980，宽度可变 ——
      全屏时按可用区域的宽高比把海面加宽，好把屏幕填满（不再是两边一片黑）。
      联机时强制回到 BASE_W：所有人必须是同一片海才公平，服务器也是按 600 宽发坐标的。 */
@@ -354,6 +359,13 @@
       pw_turbo:"⚡ 快收线", pw_watch:"⏱ 怀表　+5 秒",
       burst_puffer:"河豚炸了！周围的鱼被震晕", burst_mine:"轰！鱼被炸散了",
       school:"🐟 鱼阵来了！",
+      achv_new:"🏅 成就达成：{name}", achv_head:"成就 {a}/{b}", achv_none:"这局没有新成就",
+      achv_list:"新成就：{list}", btn_card:"保存成绩图", card_saved:"已保存 ✓", card_shared:"已分享 ✓", t_music:"背景音乐开关",
+      card_title:"宝藏海湾 · 钓鱼机", card_dex:"图鉴", card_best:"最高", card_mode_daily:"每日挑战",
+      card_mode_mp:"联机", card_missions:"任务",
+      coop_label:"合作模式（全队共用目标分）", coop_hud:"全队 {team} / {target}",
+      coop_win:"🎉 达成目标！全队 {team} / {target}", coop_lose:"差一点…全队 {team} / {target}",
+      ink_hit:"被泼了墨！", ink_use:"墨囊！糊他们一脸", emote_tip:"按 1~4 发表情",
       sc_day:"☀️ 晴天", sc_dusk:"🌇 黄昏", sc_night:"🌙 夜钓　只有会发光的看得清", sc_storm:"⛈️ 暴风雨　船摇得厉害",
       pop_stolen:"被抢走了！", pop_won:"抢到了！", pop_boss_spawn:"深海巨兽出现！",
       pop_fever:"FEVER！得分 ×1.5", hud_fever:"FEVER ×1.5", hud_combo:"连击 ×{c}　得分 ×{m}",
@@ -410,6 +422,13 @@
       pw_turbo:"⚡ Fast reel", pw_watch:"⏱ Pocket watch　+5s",
       burst_puffer:"The puffer popped! Nearby fish are stunned", burst_mine:"Boom! Fish blown away",
       school:"🐟 A school arrives!",
+      achv_new:"🏅 Achievement: {name}", achv_head:"Achievements {a}/{b}", achv_none:"No new achievements",
+      achv_list:"New: {list}", btn_card:"Save score card", card_saved:"Saved ✓", card_shared:"Shared ✓", t_music:"Music on/off",
+      card_title:"Treasure Cove", card_dex:"Bestiary", card_best:"Best", card_mode_daily:"Daily",
+      card_mode_mp:"Online", card_missions:"Missions",
+      coop_label:"Co-op (shared team target)", coop_hud:"Team {team} / {target}",
+      coop_win:"🎉 Target reached! Team {team} / {target}", coop_lose:"So close… Team {team} / {target}",
+      ink_hit:"Inked!", ink_use:"Ink! Right in their faces", emote_tip:"Keys 1-4 send an emote",
       sc_day:"☀️ Clear", sc_dusk:"🌇 Dusk", sc_night:"🌙 Night dive　only glowing things show", sc_storm:"⛈️ Storm　the boat is rocking",
       pop_stolen:"Snatched away!", pop_won:"Got it first!", pop_boss_spawn:"A deep-sea beast appears!",
       pop_fever:"FEVER! Score ×1.5", hud_fever:"FEVER ×1.5", hud_combo:"Combo ×{c}　Score ×{m}",
@@ -497,6 +516,8 @@
               art:"watch",   move:"coin", power:"watch",   label:"⏱", labelColor:"#8bf5a8" },
     turbo:  { name:"浮标",     en:"Turbo Float", score:0, pull:340, depth:[0.08,0.60], hw:22, hh:22, lo:32, w:4,
               art:"turbo",   move:"coin", power:"turbo",   label:"⚡", labelColor:"#ffd24a" },
+    ink:    { name:"墨囊",     en:"Ink Sac",     score:0, pull:300, depth:[0.25,0.85], hw:24, hh:24, lo:34, w:0,
+              art:"ink",     move:"coin", power:"ink", label:"🖤", labelColor:"#c6a2ff" },
     mine:   { name:"水雷",     en:"Sea Mine",     score:0,    pull:260, depth:[0.20,0.90], hw:26, hh:26, lo:38, w:6,  art:"mine",  move:"coin",
               hazard:true, penalty:3, label:"-3s", labelColor:"#ff8a7a" },
   };
@@ -591,28 +612,54 @@
     overBest:  document.getElementById("over-best"),
     price: document.getElementById("menu-price"),
     sound: document.getElementById("btn-sound"),
+    music: document.getElementById("btn-music"),
     full:  document.getElementById("btn-full"),
     segDur: document.getElementById("seg-dur"),
     menuRank: document.getElementById("menu-rank"),
     overRank: document.getElementById("over-rank"),
     share: document.getElementById("btn-share"),
     mpSpec: document.getElementById("mp-spec"),
+    mpCoop: document.getElementById("mp-coop"),
     daily: document.getElementById("btn-daily"),
     dailyNote: document.getElementById("daily-note"),
     lang:  document.getElementById("btn-lang"),
     stage: document.getElementById("stage"),
     dexCount: document.getElementById("dex-count"),
+    achvHead: document.getElementById("achv-head"),
     overDex:  document.getElementById("over-dex"),
     overPlayers: document.getElementById("over-players"),
     mpRoom: document.getElementById("mp-room"),
     mpUrl:  document.getElementById("mp-url"),
     mpName: document.getElementById("mp-name"),
     overMiss: document.getElementById("over-miss"),
+    overAchv: document.getElementById("over-achv"),
+    card: document.getElementById("btn-card"),
     mpNote: document.getElementById("mp-note"),
     mpPanel: document.getElementById("mp-panel"),
   };
   el.best.textContent = best;
   const KIND_IDS = Object.keys(KINDS);
+  /* 成就：跨局累积，存在浏览器里。局末统一判定（有些条件必须等一局结束才知道），
+     判定只读这一局的统计 roundStat，不去翻历史。 */
+  const ACHV_KEY = "treasureCove.achv.v1";
+  const ACHIEVEMENTS = [
+    { id:"chain8",  zh:"一钩串满 8 个",     en:"Chain of 8 in one haul",   test:r => r.maxChain >= 8 },
+    { id:"boss",    zh:"拉上深海巨兽",       en:"Landed the Deep-Sea Beast", test:r => (r.caught.boss || 0) > 0 },
+    { id:"combo15", zh:"连击 15",           en:"15-hit combo",             test:r => r.maxCombo >= 15 },
+    { id:"score5k", zh:"单局 5000 分",      en:"5000 in one round",        test:r => r.score >= 5000 },
+    { id:"score1w", zh:"单局 10000 分",     en:"10000 in one round",       test:r => r.score >= 10000 },
+    { id:"clean",   zh:"整局不碰水雷且过 2000", en:"2000+ without a mine",  test:r => r.mineHits === 0 && r.score >= 2000 },
+    { id:"night3k", zh:"夜钓拿到 3000 分",   en:"3000 at night",            test:r => r.scene === "night" && r.score >= 3000 },
+    { id:"storm3k", zh:"暴风雨里拿到 3000 分", en:"3000 in a storm",        test:r => r.scene === "storm" && r.score >= 3000 },
+    { id:"allpw",   zh:"一局用齐 4 种道具",   en:"All four power-ups in one round", test:r => r.powersUsed >= 4 },
+    { id:"dexall",  zh:"集齐图鉴",           en:"Complete the bestiary",     test:r => seen.size >= KIND_IDS.length },
+    { id:"chest3",  zh:"一局钓 3 个宝箱",     en:"3 chests in one round",     test:r => (r.caught.chest || 0) >= 3 },
+    { id:"mpwin",   zh:"联机拿第一",         en:"Win an online round",       test:r => r.mpRank === 1 && r.mpPlayers > 1 },
+    { id:"daily5",  zh:"完成 5 次每日挑战",   en:"5 daily challenges",        test:r => dailyRec.plays >= 5 },
+  ];
+  let achv = new Set();
+  try { achv = new Set(JSON.parse(localStorage.getItem(ACHV_KEY) || "[]")); } catch (_) {}
+  const achvName = a => (lang === "en" && a.en) ? a.en : a.zh;
   function renderDex() {
     el.price.innerHTML = KIND_IDS.map(k => {
       const got = seen.has(k) ? "" : " class=\"locked\"";
@@ -620,6 +667,7 @@
       return `<span${got}>${seen.has(k) ? "✔" : "·"} ${kindName(k)}</span><span${got}>${val}</span>`;
     }).join("");
     el.dexCount.textContent = `${seen.size} / ${KIND_IDS.length}`;
+    el.achvHead.innerHTML = t("achv_head", { a: `<b>${achv.size}</b>`, b: ACHIEVEMENTS.length });
   }
   renderDex();
 
@@ -664,6 +712,69 @@
       osc.start(t); osc.stop(t + dur);
     } catch (_) {}
   }
+  /* 背景音乐：WebAudio 现场合成一段循环的海盗小调（不引任何外部文件，保持单文件）。
+     两个声部：三角波旋律 + 方波低音，各自按拍推进；FEVER 时整体加快 15%。
+     浏览器在用户操作前不让出声，所以只在点过按钮 / 点过画面之后才真正开始。 */
+  const MUSIC_KEY = "treasureCove.music.v1";
+  const MEL  = [[69,1],[74,1],[72,.5],[70,.5],[69,1],[67,1],[65,1],[67,1],
+                [69,1],[70,1],[72,1],[70,1],[69,1],[67,1],[65,3]];
+  const BASS = [[38,2],[38,2],[45,2],[45,2],[46,2],[46,2],[45,1],[43,1],[45,2]];
+  const BGM = { on:false, timer:null, mi:0, mt:0, bi:0, bt:0, gain:null };
+  try { BGM.on = localStorage.getItem(MUSIC_KEY) === "1"; } catch (_) {}
+
+  const midiHz = n => 440 * Math.pow(2, (n - 69) / 12);
+
+  function bgmNote(n, at, dur, type, vol) {
+    const osc = audio.createOscillator(), g = audio.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(midiHz(n), at);
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.linearRampToValueAtTime(vol, at + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    osc.connect(g).connect(BGM.gain);
+    osc.start(at); osc.stop(at + dur + 0.05);
+  }
+
+  function bgmSchedule() {
+    if (!BGM.on || !audio || !BGM.gain) return;
+    const spb = 60 / (104 * (fever ? 1.15 : 1));       // 每拍秒数，FEVER 提速
+    const look = audio.currentTime + 0.35;
+    while (BGM.mt < look) {
+      const [n, b] = MEL[BGM.mi % MEL.length];
+      bgmNote(n, BGM.mt, b * spb * 0.9, "triangle", 0.045);
+      BGM.mt += b * spb; BGM.mi++;
+    }
+    while (BGM.bt < look) {
+      const [n, b] = BASS[BGM.bi % BASS.length];
+      bgmNote(n, BGM.bt, b * spb * 0.95, "square", 0.022);
+      BGM.bt += b * spb; BGM.bi++;
+    }
+  }
+
+  function bgmStart() {
+    if (!BGM.on) return;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === "suspended") audio.resume();
+      if (!BGM.gain) {
+        BGM.gain = audio.createGain();
+        BGM.gain.connect(audio.destination);
+      }
+      BGM.gain.gain.value = 0.9;
+      BGM.mt = BGM.bt = audio.currentTime + 0.15;
+      BGM.mi = BGM.bi = 0;
+      clearInterval(BGM.timer);
+      BGM.timer = setInterval(bgmSchedule, 120);
+      bgmSchedule();
+    } catch (_) {}
+  }
+
+  function bgmStop() {
+    clearInterval(BGM.timer);
+    BGM.timer = null;
+    if (BGM.gain) try { BGM.gain.gain.value = 0; } catch (_) {}
+  }
+
   function fanfare() {
     [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, 0.13, "triangle", 0.05), i * 90));
   }
@@ -756,6 +867,9 @@
     schoolTimer = grand(10, 18);
     bonusGiven = 0; fever = false;
     powers = { magnet: 0, bighook: 0, turbo: 0 };
+    inkT = 0; inkBlobs.length = 0; emotes.clear();
+    powersSeen.clear();
+    roundStat = { maxChain:0, maxCombo:0, powersUsed:0, score:0, mineHits:0, scene, caught:{}, mpRank:0, mpPlayers:0 };
     rollMissions();
     if (!online) { setScene(pickScene()); announceScene(); }
     el.stage.classList.remove("fever");
@@ -801,6 +915,7 @@
     el.overBest.textContent =
       (bonus > 0 ? t("bonus_line", { n: bonus }) : "") +
       (score >= best && score > 0 ? t("newrec") : t("best_gap", { b: best, d: best - score }));
+    paintAchvLine();
   }
 
   function endGame() {
@@ -818,6 +933,7 @@
       entry.at = ranks.find(x => x.sc === score)?.at || entry.at;
     }
     if (daily) { saveDaily(score); refreshDaily(); }
+    lastGotA = checkAchievements();
     paintSoloResults(entry);
     renderDex();
     repaintResults = () => paintSoloResults(entry);
@@ -859,6 +975,42 @@
     ? ` (${Math.min(m.prog, m.def.goal)}/${m.def.goal})`
     : `（${Math.min(m.prog, m.def.goal)}/${m.def.goal}）`;
   let missions = [], mineHits = 0, missionPoints = 0;   // 任务奖励单独记，别混进连击加成
+
+
+  let lastGotA = [];                               // 这一局刚解锁的成就 id，重画结算页时要用
+
+  // 这一局的统计，成就判定只看它
+  let roundStat = { maxChain:0, maxCombo:0, powersUsed:0, score:0, mineHits:0, scene:"day", caught:{}, mpRank:0, mpPlayers:0 };
+  const powersSeen = new Set();
+
+  function paintAchvLine() {
+    el.overAchv.textContent = lastGotA.length
+      ? t("achv_list", { list: lastGotA.map(id => achvName(ACHIEVEMENTS.find(a => a.id === id)))
+                                     .join(lang === "en" ? ", " : "、") })
+      : t("achv_none");
+  }
+
+  function checkAchievements(extra) {
+    const r = Object.assign({}, roundStat, {
+      score, mineHits, scene, caught, powersUsed: powersSeen.size,
+    }, extra || {});
+    const got = [];
+    for (const a of ACHIEVEMENTS) {
+      if (achv.has(a.id)) continue;
+      let ok = false;
+      try { ok = !!a.test(r); } catch (_) {}
+      if (ok) { achv.add(a.id); got.push(a.id); }
+    }
+    if (got.length) {
+      try { localStorage.setItem(ACHV_KEY, JSON.stringify([...achv])); } catch (_) {}
+      got.forEach((id, i) => setTimeout(() => {
+        pop(W / 2, SEA_Y + 200 + i * 26,
+            t("achv_new", { name: achvName(ACHIEVEMENTS.find(a => a.id === id)) }), "#ffd24a", 20);
+        fanfare();
+      }, i * 400));
+    }
+    return got;
+  }
 
   function rollMissions() {
     const pool = MISSIONS.slice();
@@ -987,6 +1139,7 @@
     hit.life = Infinity;                           // 钩住后不会消失
     hook.catches.push(hit);
     hook.pull = pullSpeed();                       // 越串越沉
+    roundStat.maxChain = Math.max(roundStat.maxChain, hook.catches.length);
     const n = hook.catches.length;
     beep(hit.kind.score >= 400 ? 990 : 430 + n * 70, 0.1, "square", 0.04);
     if (!spectating && hit.kind.score >= 400) startStruggle(hit);
@@ -1041,9 +1194,28 @@
     }
   }
 
+  function inkSplat() {                            // 被泼墨：糊住视野一会儿
+    inkT = 2.8;
+    inkBlobs.length = 0;
+    /* 要几坨分开的墨点，不要糊成一整块 —— 半径别太大，
+       并且横向按格子铺开，不然随机一挤就把半屏堵死了。 */
+    for (let i = 0; i < 8; i++) {
+      inkBlobs.push({ x: (i + rand(0.15, 0.85)) / 8, y: rand(0.1, 0.9), r: rand(42, 78) });
+    }
+    pop(W / 2, SEA_Y + 70, t("ink_hit"), "#c6a2ff", 22);
+    beep(140, 0.3, "sawtooth", 0.05);
+    if (navigator.vibrate) try { navigator.vibrate(90); } catch (_) {}
+  }
+
   function activatePower(id, atX, atY) {
     const k = KINDS[id], P = POWERS[k.power];
     if (!P) return;
+    if (P.offense) {                               // 墨囊：效果落在别人身上
+      pop(atX, atY, t("ink_use"), "#c6a2ff", 20);
+      beep(320, 0.2, "sawtooth", 0.05);
+      return;
+    }
+    powersSeen.add(k.power);
     if (P.dur) powers[k.power] = Math.max(powers[k.power] || 0, P.dur);
     if (P.time && !online) timeLeft = Math.min(99, timeLeft + P.time);   // 联机由服务器加时
     pop(atX, atY, t("pw_" + k.power), k.labelColor || "#9be7ff", 20);
@@ -1086,6 +1258,7 @@
         const gained = Math.round(it.kind.score * comboMult() * (fever ? FEVER_MULT : 1));
         score += gained;
         combo++;                                   // 一串里每一个都算一次连击
+        roundStat.maxCombo = Math.max(roundStat.maxCombo, combo);
         total += gained;
         bonusSec += timeBonus(it.kind);
         caught[it.id] = (caught[it.id] || 0) + 1;
@@ -1178,6 +1351,7 @@
   function update(dt) {
     waveT += dt;
     for (const k in powers) if (powers[k] > 0) powers[k] = Math.max(0, powers[k] - dt);
+    if (inkT > 0) inkT = Math.max(0, inkT - dt);
     bob = Math.sin(waveT * 1.5) * 5 * ((SCENES[scene] || SCENES.day).bob || 1);
 
     ship.x    = W / 2 + Math.sin(waveT * 0.3) * (W * 0.24);
@@ -1827,7 +2001,24 @@
     ctx.closePath(); ctx.fill();
   }
 
-  const ART = { magnet:artMagnet, bighook:artBighook, watch:artWatch, turbo:artTurbo,
+  function artInk(it) {                                   // 墨囊
+    const p = 1 + Math.sin(it.t * 3) * 0.08;
+    ctx.scale(p, p);
+    ctx.fillStyle = "rgba(198,162,255,.18)";
+    ctx.beginPath(); ctx.arc(0, 0, 28, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#2a2340";
+    ctx.beginPath(); ctx.ellipse(0, 0, 16, 13, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#4b3f6b";
+    ctx.beginPath(); ctx.ellipse(-4, -4, 7, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#2a2340"; ctx.lineWidth = 3;         // 几条小触手
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath(); ctx.moveTo(-8 + i * 8, 10);
+      ctx.quadraticCurveTo(-8 + i * 8 + Math.sin(it.t * 4 + i) * 5, 20, -8 + i * 8, 26);
+      ctx.stroke();
+    }
+  }
+
+  const ART = { ink:artInk, magnet:artMagnet, bighook:artBighook, watch:artWatch, turbo:artTurbo,
                 boot:artBoot, mine:artMine, fish:artFish, sword:artSword, angler:artAngler, boss:artBoss, squid:artSquid,
                 turtle:artTurtle, jelly:artJelly, puffer:artPuffer, crab:artCrab,
                 coin:artCoin, chest:artChest };
@@ -1863,7 +2054,7 @@
     ctx.globalAlpha = (fading ? 0.4 : 1) * nightAlpha(it);
     ctx.translate(it.x, it.y);
     // 水母、金币、宝箱没有朝向；其它按游动方向翻转
-    if (!["jelly", "coin", "chest", "mine", "boot", "magnet", "bighook", "watch", "turbo"]
+    if (!["jelly", "coin", "chest", "mine", "boot", "magnet", "bighook", "watch", "turbo", "ink"]
          .includes(it.kind.art)) ctx.scale(it.vx >= 0 ? 1 : -1, 1);
     ART[it.kind.art](it);
     ctx.restore();
@@ -1937,9 +2128,19 @@
     if (SCENES[scene].dark) drawLamp();
     drawLabels();
 
+    if (inkT > 0) {                                // 墨迹糊在最上层
+      const a = Math.min(1, inkT / 0.6);
+      // 要够黑：夜里的深水本来就暗，墨太淡反而是「提亮」，看着不像被糊住
+      ctx.fillStyle = `rgba(8,6,16,${0.93 * a})`;
+      for (const b of inkBlobs) {
+        ctx.beginPath();
+        ctx.ellipse(b.x * W, SEA_Y + b.y * (H - SEA_Y), b.r * 1.25, b.r, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
     if (struggle) drawStruggle();
     if (!spectating) { drawShip(); drawLine(); }
-    if (online) drawRemotes();
+    if (online) { drawRemotes(); drawEmotes(); }
     if (spectating) {
       ctx.font = "900 20px 'Segoe UI','PingFang SC',sans-serif";
       ctx.textAlign = "center";
@@ -1983,6 +2184,15 @@
         ctx.fillStyle = `rgba(255,196,90,${0.85 + Math.sin(waveT * 7) * 0.15})`;
         ctx.fillText(t("hud_fever"), 14, hy);
         hy += 26;
+      }
+      if (coop && online) {
+        ctx.font = "900 16px 'Segoe UI','PingFang SC',sans-serif";
+        ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,.6)";
+        const ct = t("coop_hud", { team: coopTeam, target: coopTarget });
+        ctx.strokeText(ct, 14, hy);
+        ctx.fillStyle = coopTeam >= coopTarget ? "#8bf5a8" : "#9be7ff";
+        ctx.fillText(ct, 14, hy);
+        hy += 22;
       }
       if (daily) {
         ctx.font = "900 14px 'Segoe UI','PingFang SC',sans-serif";
@@ -2079,8 +2289,14 @@
   /* 道具：钓到就生效一段时间。磁铁/大钩/快收线纯本地表现（联机也一致，
      因为抢鱼由服务器仲裁）；怀表要加时间，单人本地加、联机由服务器加。 */
   const POWERS = { magnet: { dur: 6 }, bighook: { dur: 8, mult: 1.8 },
-                   turbo: { dur: 10, mult: 1.6 }, watch: { time: 5 } };
+                   turbo: { dur: 10, mult: 1.6 }, watch: { time: 5 }, ink: { offense: true } };
   let powers = { magnet: 0, bighook: 0, turbo: 0 };
+
+  let inkT = 0;                                    // 被泼墨的剩余时间
+  const inkBlobs = [];                             // 墨点位置（生成一次，别每帧乱跳）
+  const emotes = new Map();                        // playerId -> {e, t}
+  const EMOJI = ["👍", "😂", "🎣", "😱"];
+  let coop = false, coopTeam = 0, coopTarget = 0;
 
   let struggle = null;
   let shakeT = 0;                                   // 画面震动剩余时间
@@ -2172,12 +2388,18 @@
         items = [];
         (m.items || []).forEach(netItem);
         timeLeft = m.time; fever = m.fever;
-        if (m.dur) { roundTime = m.dur; renderDurSeg(); }
         if (m.scene) setScene(m.scene);
         netNote(spectating ? t("net_spectating", { room: NET.room }) : t("net_connected", { room: NET.room }), "ok");
         el.stage.classList.toggle("fever", !!m.fever);
-        if (m.state === "playing") { state = "playing"; }
-        else { state = "playing"; NET.send({ t:"ready" }); }   // 大厅里就直接开一局
+        state = "playing";
+        if (m.state === "playing") {                          // 房间已经在打了：局时和模式都跟着房间走
+          if (m.dur) { roundTime = m.dur; renderDurSeg(); }
+          coop = !!m.coop; coopTarget = m.target || 0;
+          el.mpCoop.checked = coop;
+        } else {                                              // 房间还空着：我这一票定局时和模式
+          coop = el.mpCoop.checked; coopTarget = 0; coopTeam = 0;
+          NET.send({ t:"ready", dur: roundTime, coop });       // 别读 m.dur —— 那只是空房间的默认值
+        }
         syncHud();
         break;
 
@@ -2200,6 +2422,7 @@
         timeLeft = m.time; fever = false; bonusGiven = 0;
         if (m.dur) { roundTime = m.dur; renderDurSeg(); }
         if (m.scene) { setScene(m.scene); announceScene(); }   // 联机天色由服务器统一
+        coop = !!m.coop; coopTarget = m.target || 0; coopTeam = 0;
         el.stage.classList.remove("fever");
         NET.players = new Map((m.players || []).map(p => [p.id, p]));
         syncHud();
@@ -2222,6 +2445,7 @@
         timeLeft = m.time;
         if (mine) {
           score = m.score; combo = m.combo;
+          roundStat.maxCombo = Math.max(roundStat.maxCombo, combo);
           const it = hook.catches.find(c => c.netId === m.id);
           const kind = KINDS[m.kind];
           if (kind.hazard) {                       // 扣时间已经由服务器算进 m.time
@@ -2230,7 +2454,8 @@
             break;
           }
           if (kind.power) {                        // 道具只给钓到的人（怀表的时间服务器已加）
-            activatePower(m.kind, hook.x, SEA_Y + 16);
+            if (m.kind === "ink") { pop(hook.x, SEA_Y + 16, t("ink_use"), "#c6a2ff", 21); beep(520, 0.18, "square", 0.05); }
+            else activatePower(m.kind, hook.x, SEA_Y + 16);
             syncHud();
             break;
           }
@@ -2253,11 +2478,16 @@
         } else {
           const had = hook.catches.some(c => c.netId === m.id);
           netDrop(m.id);
+          if (m.kind === "ink" && !spectating) inkSplat();     // 墨囊：钓到的人糊别人
           if (had) pop(hook.x, hook.y - 30, t("pop_stolen"), "#ff9f6b", 19);
         }
         syncHud();
         break;
       }
+
+      case "emote":
+        emotes.set(m.by, { e: m.e, t: performance.now() / 1000 });
+        break;
 
       case "hooks":
         for (const [idStr, v] of Object.entries(m.h || {})) {
@@ -2272,6 +2502,7 @@
       case "tick":
         timeLeft = m.time;
         specCount = m.specs || 0;
+        coop = !!m.coop; coopTarget = m.target || 0; coopTeam = m.team || 0;
         if (m.fever !== fever) {
           fever = m.fever;
           el.stage.classList.toggle("fever", fever);
@@ -2296,7 +2527,7 @@
     }
   }
 
-  function showOnlineResults(list) {
+  function showOnlineResults(list, repaint) {
     const mine = list.find(p => p.id === NET.you);
     const rank = list.findIndex(p => p.id === NET.you) + 1;
     score = mine ? mine.score : score;
@@ -2314,16 +2545,41 @@
     el.overTable.innerHTML = Object.keys(KINDS).filter(k => caught[k])
       .map(k => `<span>${kindName(k)} ×${caught[k]}</span><span>${t("pts", { n: earned[k] })}</span>`).join("")
       || `<span>${t("nothing_mp")}</span><span>${t("pts", { n: 0 })}</span>`;
+    if (!repaint) lastGotA = checkAchievements({ mpRank: rank, mpPlayers: list.length });
+    paintAchvLine();
     el.overMiss.innerHTML = "";                   // 联机局不跑任务
     el.overDex.textContent = newSeen.length
       ? t("dex_new", { list: newSeen.join(lang === "en" ? ", " : "、"), a: seen.size, b: KIND_IDS.length })
       : t("dex_prog", { a: seen.size, b: KIND_IDS.length });
     renderDex();
-    el.overBest.textContent = list.length > 1
-      ? t("mp_rank", { n: list.length, r: rank }) : t("mp_alone");
-    repaintResults = () => showOnlineResults(list);
+    const team = list.reduce((a, p) => a + p.score, 0);
+    el.overBest.textContent = coop && coopTarget > 0
+      ? t(team >= coopTarget ? "coop_win" : "coop_lose", { team, target: coopTarget })
+      : (list.length > 1 ? t("mp_rank", { n: list.length, r: rank }) : t("mp_alone"));
+    repaintResults = () => showOnlineResults(list, true);
     el.over.classList.remove("hidden");
-    rank === 1 && list.length > 1 ? fanfare() : beep(300, 0.3, "sawtooth", 0.05);
+    if (!repaint) rank === 1 && list.length > 1 ? fanfare() : beep(300, 0.3, "sawtooth", 0.05);
+  }
+
+  function sendEmote(i) {
+    if (!online || !EMOJI[i]) return;
+    emotes.set(NET.you, { e:i, t: performance.now() / 1000 });   // 自己也看得到
+    NET.send({ t:"emote", e:i });
+  }
+
+  function drawEmotes() {                          // 别人发的表情，飘在他的船上方
+    const now = performance.now() / 1000;
+    for (const [id, em] of emotes) {
+      if (now - em.t > 2.2) { emotes.delete(id); continue; }
+      const h = NET.hooks.get(id);
+      const x = id === NET.you ? ship.x : (h ? h.rx : W / 2);
+      const y = SEA_Y - 52 - (now - em.t) * 22;     // 起点在名字牌上面，别压着名字
+      ctx.globalAlpha = Math.max(0, 1 - (now - em.t) / 2.2);
+      ctx.font = "30px 'Segoe UI Emoji','Apple Color Emoji',sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(EMOJI[em.e] || "👍", x, y);
+      ctx.globalAlpha = 1;
+    }
   }
 
   // 联机时画别人的船、鱼线和钩子，右上角一块实时比分
@@ -2391,6 +2647,8 @@
       n.placeholder = t(n.getAttribute("data-ph"));
     });
     el.sound.title = t("t_sound");
+    el.music.title = t("t_music");
+    syncMusicBtn();
     el.lang.title  = t("t_lang");
     el.lang.textContent = lang === "zh" ? "EN" : "中";
     el.full.title = (isFs() || manualIm) ? t("t_full_exit") : t("t_full");
@@ -2462,7 +2720,7 @@
   };
 
   function requestStart() {
-    if (online) NET.send({ t:"ready", dur: roundTime });   // 联机：谁先点谁定时长
+    if (online) NET.send({ t:"ready", dur: roundTime, coop: el.mpCoop.checked });   // 联机：谁先点谁定时长 + 模式
     else startGame();
   }
 
@@ -2532,6 +2790,114 @@
     try { localStorage.setItem(DAILY_KEY, JSON.stringify(dailyRec)); } catch (_) {}
   }
 
+  /* 成绩卡片图：在离屏画布上画一张 900×560 的卡，能用系统分享就分享文件，
+     否则触发下载。（沙箱里的下载会被拦，那时退回复制文字。） */
+  function buildCard() {
+    const c = document.createElement("canvas");
+    c.width = 900; c.height = 560;
+    const g = c.getContext("2d");
+    const realCtx = ctx;                                     // ART 用的是全局 ctx，临时借给卡片
+
+    const SURF = 150;                                        // 水面：压在大分数上沿之上，别横穿数字
+    const sky = g.createLinearGradient(0, 0, 0, SURF);       // 天
+    sky.addColorStop(0, "#0b2d4b"); sky.addColorStop(1, "#1d6a92");
+    g.fillStyle = sky; g.fillRect(0, 0, 900, SURF);
+    const sea = g.createLinearGradient(0, SURF, 0, 560);     // 海
+    sea.addColorStop(0, "#0e6ea0"); sea.addColorStop(1, "#03203a");
+    g.fillStyle = sea; g.fillRect(0, SURF, 900, 560 - SURF);
+    g.strokeStyle = "rgba(230,250,255,.7)"; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(0, SURF); g.lineTo(900, SURF); g.stroke();
+    g.strokeStyle = "#6b3f1d"; g.lineWidth = 10;             // 机台木框
+    g.strokeRect(5, 5, 890, 550);
+
+    g.textAlign = "left";
+    g.fillStyle = "#ffd24a";
+    g.font = "900 34px 'Segoe UI','PingFang SC',sans-serif";
+    g.fillText("🏴‍☠️ " + t("card_title"), 40, 70);
+    g.fillStyle = "#cfe6f2";
+    g.font = "600 19px 'Segoe UI','PingFang SC',sans-serif";
+    const mode = [roundTime + "s",
+                  daily ? t("card_mode_daily") : null,
+                  online ? t("card_mode_mp") : null,
+                  t("sc_" + scene).replace(/　.*$/, "")].filter(Boolean).join("　·　");
+    g.fillText(mode + "　·　" + todayKey(), 40, 104);
+
+    g.fillStyle = "#fff6dc";                                 // 大分数
+    g.font = "900 108px 'Segoe UI',sans-serif";
+    const scoreTxt = String(score);
+    g.fillText(scoreTxt, 40, 240);
+    const scoreW = g.measureText(scoreTxt).width;
+    g.fillStyle = "#ffd24a";
+    g.font = "900 30px 'Segoe UI','PingFang SC',sans-serif";
+    g.fillText((t("pts", { n: "" }).trim() || "pts"), 54 + scoreW, 240);
+
+    // 战果（最多 6 项）
+    g.font = "700 20px 'Segoe UI','PingFang SC',sans-serif";
+    const rows = Object.keys(KINDS).filter(k => caught[k]).sort((a, b) => KINDS[b].score - KINDS[a].score).slice(0, 6);
+    rows.forEach((k, i) => {
+      const x = 40 + (i % 2) * 300, y = 300 + Math.floor(i / 2) * 34;
+      g.fillStyle = KINDS[k].color || KINDS[k].labelColor || "#e8f6ff";
+      g.fillText(`${kindName(k)} ×${caught[k]}`, x, y);
+    });
+
+    const doneM = missions.filter(m => m.done);               // 任务与图鉴
+    g.fillStyle = "#9be7ff";
+    g.font = "700 18px 'Segoe UI','PingFang SC',sans-serif";
+    if (!online && doneM.length) {
+      const sep = lang === "en" ? ", " : "、";
+      g.fillText(t("card_missions") + (lang === "en" ? ": " : "：") +
+                 doneM.map(m => missionText(m.def)).join(sep).slice(0, 60), 40, 430);
+    }
+    g.fillStyle = "#cfe6f2";
+    g.fillText(`${t("card_dex")} ${seen.size}/${KIND_IDS.length}　·　${t("achv_head", { a: achv.size, b: ACHIEVEMENTS.length })}　·　${t("card_best")} ${best}`, 40, 464);
+
+    // 右侧画几条本局钓到的鱼当插图（鱼优先，不够就拿别的凑，别留空）
+    const art = [...rows.filter(k => KINDS[k].art === "fish"),
+                 ...rows.filter(k => KINDS[k].art !== "fish")].slice(0, 3);
+    ctx = g;                                                 // 让 ART 画到卡片上
+    art.forEach((k, i) => {
+      g.save();
+      g.translate(760, 250 + i * 95);
+      g.scale(1.15, 1.15);
+      try { ART[KINDS[k].art]({ kind: KINDS[k], id: k, t: 0, wob: 0.5, vx: 1 }); } catch (_) {}
+      g.restore();
+    });
+    ctx = realCtx;
+
+    g.fillStyle = "rgba(255,246,220,.55)";
+    g.font = "600 16px 'Segoe UI',sans-serif";
+    g.textAlign = "right";
+    g.fillText(location.host + location.pathname, 860, 520);
+    return c;
+  }
+
+  async function shareCard() {
+    const done = msg => { el.card.textContent = msg;
+      setTimeout(() => el.card.textContent = t("btn_card"), 1600); };
+    let blob;
+    try {
+      const c = buildCard();
+      blob = await new Promise(res => c.toBlob(res, "image/png"));
+    } catch (_) { done(t("share_failed")); return; }
+    if (!blob) { done(t("share_failed")); return; }
+
+    const file = new File([blob], "treasure-cove.png", { type: "image/png" });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], text: shareText() });
+        done(t("card_shared")); return;
+      }
+    } catch (_) { /* 用户取消或不支持，走下载 */ }
+    try {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "treasure-cove-" + todayKey() + ".png";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      done(t("card_saved"));
+    } catch (_) { done(t("share_failed")); }
+  }
+
   // ── 分享成绩：能用系统分享就分享，否则复制到剪贴板 ──
   function shareText() {
     const sep = lang === "en" ? ", " : "、";
@@ -2547,6 +2913,8 @@
     lines.push(location.origin + location.pathname);
     return lines.join("\n");
   }
+
+  el.card.addEventListener("click", e => { e.stopPropagation(); shareCard(); });
 
   el.share.addEventListener("click", async e => {
     e.stopPropagation();
@@ -2586,6 +2954,23 @@
 
     if (q.get("server") && q.get("room")) goOnline();     // 分享链接点开就直接进房
   }
+  function syncMusicBtn() {
+    el.music.textContent = "🎵";
+    el.music.style.opacity = BGM.on ? 1 : 0.45;
+  }
+  el.music.addEventListener("click", e => {
+    e.stopPropagation();
+    BGM.on = !BGM.on;
+    try { localStorage.setItem(MUSIC_KEY, BGM.on ? "1" : "0"); } catch (_) {}
+    BGM.on ? bgmStart() : bgmStop();
+    syncMusicBtn();
+  });
+  // 浏览器要等用户先动一下才让出声：开关记住了，第一次交互时补上
+  ["pointerdown", "keydown"].forEach(ev => {
+    const once = () => { window.removeEventListener(ev, once); if (BGM.on && !BGM.timer) bgmStart(); };
+    window.addEventListener(ev, once);
+  });
+
   el.sound.addEventListener("click", e => {
     e.stopPropagation();
     soundOn = !soundOn;
@@ -2596,6 +2981,11 @@
       if (document.activeElement && document.activeElement.tagName === "INPUT") return;
       e.preventDefault();
       toggleFullscreen();
+      return;
+    }
+    if (online && e.key >= "1" && e.key <= "4") {     // 1~4 发快捷表情
+      if (document.activeElement && document.activeElement.tagName === "INPUT") return;
+      sendEmote(+e.key - 1);
       return;
     }
     if (e.code !== "Space" && e.code !== "Enter") return;

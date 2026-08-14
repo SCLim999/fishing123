@@ -53,6 +53,8 @@ export const SPEC = {
   bighook:{ score:0,    w:4,  depth:[0.20,0.85], move:"coin", power:true },
   watch:  { score:0,    w:4,  depth:[0.10,0.75], move:"coin", power:true, addTime:5 },
   turbo:  { score:0,    w:4,  depth:[0.08,0.60], move:"coin", power:true },
+  // 墨囊：钓到的人把别人的视野糊住一会儿（只在联机出现，单人没有对手可泼）
+  ink:    { score:0,    w:5,  depth:[0.25,0.85], move:"coin", power:true, ink:true },
 };
 const SPEED = { coin:[12,28], swim:[24,64], drift:[6,14], paddle:[16,28],
                 jet:[26,46], crawl:[26,44], rise:[8,16] };
@@ -83,6 +85,8 @@ export class Room {
     this.state   = "lobby";        // lobby | playing | over
     this.roundTime = GAME_TIME;    // 本局时长（30 / 60 / 120）
     this.scene = "day";            // 本局天色
+    this.coop = false;             // 合作模式：全房间共用一个目标分
+    this.target = 0;
     this.timeLeft = GAME_TIME;
     this.fever = false;
     this.bonusGiven = 0;
@@ -123,6 +127,7 @@ export class Room {
     this.players.set(id, p);
     this.sendTo(id, { t: "welcome", you: id, state: this.state, time: Math.ceil(this.timeLeft),
                       fever: this.fever, dur: this.roundTime, scene: this.scene, spec: p.spec,
+                      coop: this.coop, target: this.target,
                       players: this.playerList(), items: this.itemList(), specs: this.specCount() });
     this.broadcast({ t: "joined", p: { id: p.id, name: p.name, score: 0, spec: p.spec },
                      specs: this.specCount() }, id);
@@ -143,9 +148,18 @@ export class Room {
     if (!p || !msg || typeof msg.t !== "string") return;
 
     switch (msg.t) {
-      case "ready":                                  // 谁先点谁定这一局的时长
-        if (this.state !== "playing") this.startRound(+msg.dur);
+      case "ready":                                  // 谁先点谁定这一局的时长和模式
+        if (this.state !== "playing") this.startRound(+msg.dur, !!msg.coop);
         break;
+
+      case "emote": {                                // 快捷表情：转发一下就好
+        const now = Date.now();
+        if (now - (p.lastEmote || 0) < 700) return;   // 简单限流，别刷屏
+        p.lastEmote = now;
+        const e = Math.max(0, Math.min(5, +msg.e || 0));
+        this.broadcast({ t: "emote", by: id, e });
+        break;
+      }
 
       case "hook": {                                 // 只是给别人看的，不参与判定
         if (p.spec) return;                          // 观众没有钩子
@@ -212,13 +226,18 @@ export class Room {
   }
 
   // ───────────────────────── 一局 ─────────────────────────
-  startRound(dur) {
+  startRound(dur, coop = false) {
     this.roundTime = DURATIONS.includes(+dur) ? +dur : GAME_TIME;
     this.scene = pickScene();
+    this.coop = !!coop;
+    const fishers = Math.max(1, this.playerList().length);
+    // 目标分按人头和局时缩放，人多不能白送
+    this.target = this.coop ? Math.round(2600 * fishers * (this.roundTime / 60)) : 0;
     this.reset("playing");
     for (const p of this.players.values()) { p.score = 0; p.combo = 0; }
     this.broadcast({ t: "start", time: this.roundTime, dur: this.roundTime,
-                     scene: this.scene, players: this.playerList() });
+                     scene: this.scene, coop: this.coop, target: this.target,
+                     players: this.playerList() });
     for (let i = 0; i < 12; i++) this.spawnOne(true);   // 开局先铺一片鱼
     this.flushSpawns();
   }
@@ -240,7 +259,10 @@ export class Room {
     this.state = "over";
     this.timeLeft = 0;
     this.overAt = OVER_HOLD;
-    this.broadcast({ t: "over", players: this.playerList(), dur: this.roundTime });
+    const team = this.playerList().reduce((a, p) => a + p.score, 0);
+    this.broadcast({ t: "over", players: this.playerList(), dur: this.roundTime,
+                     coop: this.coop, target: this.target, team,
+                     win: this.coop ? team >= this.target : undefined });
   }
 
   // ───────────────────────── 出鱼 ─────────────────────────
@@ -346,8 +368,10 @@ export class Room {
     this.tickAcc = (this.tickAcc || 0) + dt;
     if (this.tickAcc >= 1 || this.fever !== wasFever) {
       this.tickAcc = 0;
+      const teamNow = this.coop ? this.playerList().reduce((a, p) => a + p.score, 0) : 0;
       this.broadcast({ t: "tick", time: Math.ceil(this.timeLeft), fever: this.fever,
-                       players: this.playerList(), specs: this.specCount() });
+                       players: this.playerList(), specs: this.specCount(),
+                       coop: this.coop, target: this.target, team: teamNow });
     }
   }
 }
