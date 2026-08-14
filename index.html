@@ -111,6 +111,39 @@
   @media (min-width:430px){ .price.wide{grid-template-columns:auto auto auto auto} }
   .tip{color:#8fb6cf;font-size:.78rem;margin-top:8px;text-align:center;line-height:1.6}
 
+  /* 结算页的标签页 */
+  .tabs{display:flex;gap:6px;margin:2px 0 4px}
+  .tabs button{
+    background:rgba(0,0,0,.3);border:2px solid rgba(255,210,74,.35);color:#cfe6f2;
+    border-radius:9px 9px 0 0;padding:6px 14px;font-size:.8rem;font-weight:700;cursor:pointer;
+  }
+  .tabs button.on{background:linear-gradient(180deg,var(--wood2),var(--wood));
+    border-color:#3f230c;color:var(--ink)}
+  .pane.hidden{display:none}
+  .pane{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%}
+
+  /* 本局钓到的鱼：缩略图 + 名字 + 冷知识 */
+  .fish-list{
+    display:flex;flex-direction:column;gap:8px;width:min(100%,34em);
+    max-height:46vh;overflow-y:auto;padding-right:4px;
+  }
+  .fish-card{
+    display:flex;gap:11px;align-items:flex-start;text-align:left;
+    background:rgba(0,0,0,.34);border:1px solid rgba(255,210,74,.3);
+    border-radius:10px;padding:9px 11px;
+  }
+  .fish-card canvas{
+    flex:0 0 auto;width:62px;height:62px;border-radius:8px;
+    background:linear-gradient(180deg,rgba(20,90,130,.5),rgba(4,30,52,.6));
+  }
+  .fish-card .fc-body{min-width:0;flex:1 1 auto}
+  .fish-card .fc-head{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-size:.86rem;font-weight:800}
+  .fish-card .fc-n{color:#e8f6ff}
+  .fish-card .fc-v{color:var(--gold);font-variant-numeric:tabular-nums}
+  .fish-card .fc-x{color:#9be7ff;font-size:.78rem}
+  .fish-card .fc-fact{color:#a8c8da;font-size:.76rem;line-height:1.55;margin-top:3px}
+  .fish-empty{color:#a8c8da;font-size:.8rem}
+
   /* 全屏（或不支持全屏 API 时的沉浸模式）：收起标题和说明，
      用 flex 让画布吃掉 HUD 之外的全部高度 —— 不要按 vh 算高度再祈祷放得下，
      那样 HUD 一换行就会把机台顶出屏幕。 */
@@ -286,13 +319,22 @@
     <div class="overlay hidden" id="overlay-over">
       <div class="banner" data-i18n="banner_got">YOU GOT</div>
       <div class="big" id="over-score">0</div>
-      <div class="price" id="over-players" style="display:none"></div>
-      <div class="price" id="over-table"></div>
-      <p id="over-miss"></p>
-      <p id="over-achv"></p>
-      <p id="over-dex"></p>
-      <p id="over-best"></p>
-      <div class="rank" id="over-rank"></div>
+      <div class="tabs" id="over-tabs">
+        <button class="on" data-pane="sum" data-i18n="tab_sum">战果</button>
+        <button data-pane="fish" data-i18n="tab_fish">钓到的鱼</button>
+      </div>
+      <div class="pane" id="pane-sum">
+        <div class="price" id="over-players" style="display:none"></div>
+        <div class="price" id="over-table"></div>
+        <p id="over-miss"></p>
+        <p id="over-achv"></p>
+        <p id="over-dex"></p>
+        <p id="over-best"></p>
+        <div class="rank" id="over-rank"></div>
+      </div>
+      <div class="pane hidden" id="pane-fish">
+        <div class="fish-list" id="fish-list"></div>
+      </div>
       <button class="share" id="btn-share" data-i18n="btn_share">复制 / 分享成绩</button>
       <button class="share" id="btn-card" data-i18n="btn_card">保存成绩图</button>
       <button class="cta" id="btn-again" data-i18n="btn_again">再钓一次</button>
@@ -378,6 +420,9 @@
       dex_label:"图鉴", dex_hint:"钓到过的会亮起来",
       seg_dur:"局时", btn_start:"单人开钓", btn_online:"联机开钓",
       ph_room:"房间码　如 ABCD", ph_name:"你的昵称", ph_url:"联机服务器 wss://…",
+      tab_sum:"战果", tab_fish:"钓到的鱼",
+      fish_none:"这一局什么都没钓上来 —— 下一竿挑鱼多的那一竖排。",
+      fish_count:"×{n}",
       lock_title:"已锁屏", lock_sub:"输入密码继续钓鱼", lock_ph:"密码", lock_btn:"解锁",
       lock_bad:"密码不对，再试一次", lock_ok:"解锁了，开钓吧",
       spec_label:"观战模式（只看不钓）",
@@ -444,6 +489,9 @@
       dex_label:"Bestiary", dex_hint:"lights up what you have caught",
       seg_dur:"Round", btn_start:"Play solo", btn_online:"Play online",
       ph_room:"Room code, e.g. ABCD", ph_name:"Your name", ph_url:"Server wss://…",
+      tab_sum:"Results", tab_fish:"Your catch",
+      fish_none:"Nothing came up this round — aim for a column with more fish.",
+      fish_count:"×{n}",
       lock_title:"Locked", lock_sub:"Enter the password to keep fishing", lock_ph:"Password",
       lock_btn:"Unlock", lock_bad:"Wrong password — try again", lock_ok:"Unlocked. Go fish.",
       spec_label:"Spectate (watch only)",
@@ -684,6 +732,10 @@
     dexCount: document.getElementById("dex-count"),
     achvHead: document.getElementById("achv-head"),
     overDex:  document.getElementById("over-dex"),
+    overTabs: document.getElementById("over-tabs"),
+    paneSum:  document.getElementById("pane-sum"),
+    paneFish: document.getElementById("pane-fish"),
+    fishList: document.getElementById("fish-list"),
     overPlayers: document.getElementById("over-players"),
     mpRoom: document.getElementById("mp-room"),
     mpUrl:  document.getElementById("mp-url"),
@@ -696,6 +748,61 @@
   };
   el.best.textContent = best;
   const KIND_IDS = Object.keys(KINDS);
+
+  /* 结算页「钓到的鱼」那一栏里的一句话介绍。
+     真实存在的物种写的是真事；金鱼 / 鱼王 / 巨兽 / 宝箱这些是机台上编出来的，
+     就按传说和玩法来写，别混成一副"科普"的样子骗人。 */
+  const FACTS = {
+    coin:    { zh:"海底的金币多半来自沉船。船一沉，货就散在沙里，几百年后被洋流慢慢刨出来。",
+               en:"Coins on the seabed usually come from wrecks — cargo scatters into the sand and currents uncover it centuries later." },
+    clown:   { zh:"小丑鱼住在海葵的触手里，靠身上一层黏液不被蜇到。一群里体型最大的那条会变成雌鱼。",
+               en:"Clownfish live among anemone tentacles, protected by a layer of mucus. The largest fish in a group turns female." },
+    small:   { zh:"小鱼成群游不是为了热闹 —— 一大团挤在一起，捕食者很难锁定其中某一条。",
+               en:"Small fish shoal for a reason: in a tight mass, a predator struggles to lock onto any single one." },
+    jelly:   { zh:"水母没有大脑、心脏和血液，身体大约 95% 是水。它比恐龙还早出现好几亿年。",
+               en:"Jellyfish have no brain, heart or blood, and are about 95% water. They predate dinosaurs by hundreds of millions of years." },
+    puffer:  { zh:"受威胁时河豚会大口吞水，把自己胀成一个球。多数河豚身上带河豚毒素，比氰化物毒得多。",
+               en:"Threatened pufferfish gulp water to balloon up. Most carry tetrodotoxin — far more poisonous than cyanide." },
+    turtle:  { zh:"海龟没法把头缩进壳里。沙滩的温度决定孵出来是雄是雌 —— 沙子越暖，雌龟越多。",
+               en:"Sea turtles can't pull their heads into their shells. Nest temperature decides the sex — warmer sand makes more females." },
+    squid:   { zh:"乌贼有三颗心脏，血是蓝色的（靠含铜的血蓝蛋白运氧）。喷墨是给自己留一团假影子好逃走。",
+               en:"Squid have three hearts and blue blood — copper-based haemocyanin carries their oxygen. Ink leaves a decoy shape to slip away behind." },
+    medium:  { zh:"「黄金鱼」是机台编出来的，现实里没有这种鱼 —— 不过很多鱼的鳞片确实靠反光结构显出金属光。",
+               en:"The Golden Fish is an arcade invention. Real fish do get metallic sheens, though — from light-reflecting structures in their scales." },
+    big:     { zh:"红色是海水里最先被吸走的颜色，所以深一点的地方，红鱼看上去几乎是黑的 —— 反而更难被发现。",
+               en:"Red is the first colour seawater absorbs, so deeper down a red fish looks almost black — better camouflage, not worse." },
+    sword:   { zh:"剑鱼眼睛旁边有一块特化的肌肉专门给眼和脑加温，所以它冲进冷水层还能看得清。是海里最快的鱼之一。",
+               en:"Swordfish have a modified muscle beside the eye that warms eye and brain, so they see well diving into cold water. Among the ocean's fastest fish." },
+    king:    { zh:"「鱼王」是机台上的角色。真实海里最重的硬骨鱼是翻车鱼，能长到两吨以上。",
+               en:"The Fish King is an arcade character. The heaviest real bony fish is the ocean sunfish, which can top two tonnes." },
+    chest:   { zh:"真沉船宝箱几乎从不是空的 —— 但里面常见的是压舱物、陶罐和铁钉，金银是极少数。",
+               en:"Real wreck chests are rarely empty — but what's inside is usually ballast, pottery and nails. Gold is the exception." },
+    angler:  { zh:"只有雌性深海鮟鱇有那盏灯，光来自灯里共生的发光细菌。有些种类的雄鱼小得多，会一辈子附在雌鱼身上。",
+               en:"Only female deep-sea anglerfish have the lure, lit by symbiotic bacteria living inside it. In some species the tiny male attaches to her for life." },
+    boss:    { zh:"传说里的海怪多半来自真实的大王乌贼 —— 有记录的个体连触腕长约 13 米，而人类第一次拍到活体是 2004 年。",
+               en:"Sea-monster legends mostly trace back to the giant squid — recorded at about 13 m including tentacles, and first photographed alive in 2004." },
+    crab:    { zh:"螃蟹横着走是因为腿关节只能前后弯。它们用鳃呼吸，只要鳃还湿着就能在岸上待一阵。",
+               en:"Crabs walk sideways because their leg joints only bend one way. They breathe through gills, and can stay ashore while those gills stay wet." },
+    boot:    { zh:"钓上破靴子是钓鱼游戏几十年的老梗了。真实的海底垃圾里，橡胶和塑料确实是常客。",
+               en:"The old boot is a decades-old fishing-game joke. In real seabed litter, rubber and plastic really are regulars." },
+    mine:    { zh:"一战二战布下的水雷，至今仍有一部分留在海底，各国海军还在慢慢清。所以：别钩它。",
+               en:"Mines laid in both world wars still sit on the seabed, and navies are still clearing them. So: don't hook it." },
+    magnet:  { zh:"磁铁钓鱼是真的爱好（magnet fishing），人们用强力磁铁从河里捞铁器 —— 偶尔真能捞出自行车和保险箱。",
+               en:"Magnet fishing is a real hobby: people haul iron out of rivers with heavy magnets, and do occasionally land bikes and safes." },
+    bighook: { zh:"钩子越大不等于钓得越多 —— 真钓鱼里钩号要配鱼嘴，钩子过大反而挂不牢。这里就当街机福利。",
+               en:"Bigger hooks don't mean more fish — real hook size has to match the mouth. Call this one an arcade perk." },
+    watch:   { zh:"机械表在水下的最大敌人是压力和温差；能防水的表靠的是密封圈，而不是「表壳厚」。",
+               en:"A mechanical watch underwater fights pressure and temperature swings; water resistance comes from gaskets, not thick cases." },
+    turbo:   { zh:"钓鱼时浮标其实是「信号器」—— 它一沉就说明鱼咬钩了。这里被机台改成了收线加速器。",
+               en:"A float is really a signalling device — when it dips, something bit. The arcade repurposed it as a reel booster." },
+    ink:     { zh:"乌贼墨里的黑色素古代真被当墨水用过，「sepia」（深褐色）这个词就来自乌贼的属名 Sepia。",
+               en:"Cuttlefish ink was genuinely used as writing ink — the colour name \"sepia\" comes from the cuttlefish genus Sepia." },
+  };
+  const factOf = id => {
+    const f = FACTS[id];
+    if (!f) return "";
+    return (lang === "en" && f.en) ? f.en : f.zh;
+  };
   /* 成就：跨局累积，存在浏览器里。局末统一判定（有些条件必须等一局结束才知道），
      判定只读这一局的统计 roundStat，不去翻历史。 */
   const ACHV_KEY = "treasureCove.achv.v1";
@@ -1016,11 +1123,13 @@
       (bonus > 0 ? t("bonus_line", { n: bonus }) : "") +
       (score >= best && score > 0 ? t("newrec") : t("best_gap", { b: best, d: best - score }));
     paintAchvLine();
+    renderFishPane();                           // 语言切换重画时也要跟着更新
   }
 
   function endGame() {
     state = "over";
     struggle = null;
+    showPane("sum");                            // 每局结算先看战果，鱼那栏点了再看
     el.overPlayers.style.display = "none";
     el.overRank.style.display = "";
     for (const m of missions) {                   // 「整局不碰水雷」要等局末才知道
@@ -2626,6 +2735,7 @@
       case "over":
         state = "over";
         struggle = null;
+        showPane("sum");
         NET.players = new Map((m.players || []).map(p => [p.id, p]));
         showOnlineResults(m.players || []);
         break;
@@ -2652,6 +2762,7 @@
       || `<span>${t("nothing_mp")}</span><span>${t("pts", { n: 0 })}</span>`;
     if (!repaint) lastGotA = checkAchievements({ mpRank: rank, mpPlayers: list.length });
     paintAchvLine();
+    renderFishPane();
     el.overMiss.innerHTML = "";                   // 联机局不跑任务
     el.overDex.textContent = newSeen.length
       ? t("dex_new", { list: newSeen.join(lang === "en" ? ", " : "、"), a: seen.size, b: KIND_IDS.length })
@@ -2976,6 +3087,75 @@
     g.fillText(location.host + location.pathname, 860, 520);
     return c;
   }
+
+  /* 「钓到的鱼」那一栏。缩略图不是图片文件 —— 直接拿画鱼用的那套 ART 函数
+     画到一个 62×62 的小画布上，所以不增加任何外部资源，也永远和海里那条长得一样。
+     ART 读的是模块级的 ctx，这里临时把它借给小画布，画完还回去（和成绩图一个套路）。 */
+  function fishThumb(id) {
+    const k = KINDS[id], px = 62, dpr = Math.min(2, window.devicePixelRatio || 1);
+    const c = document.createElement("canvas");
+    c.width = c.height = Math.round(px * dpr);
+    const g = c.getContext("2d");
+    const realCtx = ctx;
+    ctx = g;
+    try {
+      g.scale(dpr, dpr);
+      g.translate(px / 2, px / 2);
+      // 按命中框把它缩到框里，巨兽和金币才不会一个撑爆一个小得看不见
+      const sc = Math.min(px / (k.hw * 2), px / (k.hh * 2)) * 0.86;
+      g.scale(sc, sc);
+      ART[k.art]({ kind: k, id, t: 0, wob: 0.5, vx: 1 });
+    } catch (_) {} finally { ctx = realCtx; }
+    return c;
+  }
+
+  function renderFishPane() {
+    const got = KIND_IDS.filter(k => caught[k]);
+    el.fishList.innerHTML = "";
+    if (!got.length) {
+      const d = document.createElement("div");
+      d.className = "fish-empty";
+      d.textContent = t("fish_none");
+      el.fishList.appendChild(d);
+      return;
+    }
+    // 分数高的排前面，一眼看到这局最大的收获
+    got.sort((a, b) => (KINDS[b].score || 0) - (KINDS[a].score || 0));
+    for (const id of got) {
+      const k = KINDS[id];
+      const card = document.createElement("div");
+      card.className = "fish-card";
+      card.appendChild(fishThumb(id));
+      const body = document.createElement("div");
+      body.className = "fc-body";
+      const head = document.createElement("div");
+      head.className = "fc-head";
+      const val = k.label != null ? k.label : t("pts", { n: earned[id] || 0 });
+      head.innerHTML = `<span class="fc-n">${kindName(id)}</span>` +
+                       `<span class="fc-x">${t("fish_count", { n: caught[id] })}</span>` +
+                       `<span class="fc-v">${val}</span>`;
+      const fact = document.createElement("div");
+      fact.className = "fc-fact";
+      fact.textContent = factOf(id);
+      body.appendChild(head);
+      body.appendChild(fact);
+      card.appendChild(body);
+      el.fishList.appendChild(card);
+    }
+  }
+
+  function showPane(which) {
+    el.paneSum.classList.toggle("hidden", which !== "sum");
+    el.paneFish.classList.toggle("hidden", which !== "fish");
+    [...el.overTabs.querySelectorAll("button")].forEach(b =>
+      b.classList.toggle("on", b.dataset.pane === which));
+    if (which === "fish") renderFishPane();
+  }
+  el.overTabs.addEventListener("click", e => {
+    e.stopPropagation();                        // 结算页点哪都会重开一局，标签页不能被算进去
+    const b = e.target.closest("button");
+    if (b) showPane(b.dataset.pane);
+  });
 
   async function shareCard() {
     const done = msg => { el.card.textContent = msg;
