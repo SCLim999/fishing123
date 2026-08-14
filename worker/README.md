@@ -33,19 +33,27 @@ https://treasure-cove-mp.<你的子域>.workers.dev
 让 GitHub 帮你跑 —— 仓库里的 `.github/workflows/deploy-worker.yml` 就是干这个的，
 **只能手动触发**，push 不会自动跑。全程在手机浏览器里点：
 
-1. **拿 API Token**：Cloudflare 后台右上头像 → My Profile → API Tokens → Create Token
-   → 选 **Edit Cloudflare Workers** 模板 → Continue → Create Token → **把那串复制下来**（只显示一次）。
-2. **拿 Account ID**：Workers & Pages 页面右侧就有；或者看地址栏 `dash.cloudflare.com/<这一长串>` 里那段。
-3. **存进仓库**：GitHub 仓库 → Settings → Secrets and variables → Actions → New repository secret，
-   加两条（名字要一模一样）：
-   - `CLOUDFLARE_API_TOKEN` = 第 1 步那串
-   - `CLOUDFLARE_ACCOUNT_ID` = 第 2 步那串
+1. **拿 API Token**：Cloudflare 后台 → API Tokens → Create Token。
+   - 有 **Edit Cloudflare Workers** 模板就直接用（User API Tokens 那一页有）
+   - 只有 Custom 的话（Account API tokens 那一页），搜 `Workers`，勾 **Workers Scripts: Edit**
+     就够了；顺手加 Account Settings: Read 更稳。**别点「Select all permissions」**
+   - 建完**立刻复制那串**，只显示一次
+2. **存成 Secret**：GitHub 仓库 → Settings → Secrets and variables → Actions
+   → **New repository secret** → 名字 `CLOUDFLARE_API_TOKEN`，值是第 1 步那串。
+   这是**唯一必须配的东西**。
+3. **给 Account ID**（不是密钥，就在 Cloudflare 后台地址栏 `dash.cloudflare.com/<这一段>` 里）。
+   三种都认，按这个顺序取第一个非空的：
+   - 点 Run workflow 时填进输入框 —— 临时跑一次最省事
+   - 存成仓库 **Variable**（同一页的 **Variables** 标签 → New repository variable），
+     名字 `CLOUDFLARE_ACCOUNT_ID` —— 一次配好，以后点一下就行
+   - 存成同名 Secret 也行
 4. **跑**：仓库 → Actions → 左边选 **Deploy multiplayer worker** → **Run workflow**。
 5. 跑完点进日志，「部署」那一步里有一行 `https://treasure-cove-mp.<你的子域>.workers.dev`
    —— 那就是联机服务器地址。
 
-Secret 没配好的话第一步就会明确报「缺哪个」；配好了会先空跑一遍检查配置，
-有问题不会推上线。以后改了 `server/room.mjs`，再点一次 Run workflow 就是重新部署。
+凭证没配好会在第一步就明确告诉你缺哪个、去哪加，不会让你在 wrangler 的报错里猜；
+配好了会**先空跑一遍**检查配置，有问题不会推上线。
+以后改了 `server/room.mjs`，再点一次 Run workflow 就是重新部署。
 
 Token 是写权限，别贴到聊天里或截图 —— 泄漏了就到 Cloudflare 后台 Roll / Delete 掉重建。
 
