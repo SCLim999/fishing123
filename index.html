@@ -428,6 +428,7 @@
       dex_label:"图鉴", dex_hint:"钓到过的会亮起来",
       seg_dur:"局时", btn_start:"单人开钓", btn_online:"联机开钓",
       ph_room:"房间码　如 ABCD", ph_name:"你的昵称", ph_url:"联机服务器 wss://…",
+      pop_eaten:"🦈 {name} 被吃了",
       tab_sum:"战果", tab_fish:"钓到的鱼",
       fish_none:"这一局什么都没钓上来 —— 下一竿挑鱼多的那一竖排。",
       fish_count:"×{n}",
@@ -497,6 +498,7 @@
       dex_label:"Bestiary", dex_hint:"lights up what you have caught",
       seg_dur:"Round", btn_start:"Play solo", btn_online:"Play online",
       ph_room:"Room code, e.g. ABCD", ph_name:"Your name", ph_url:"Server wss://…",
+      pop_eaten:"🦈 ate the {name}",
       tab_sum:"Results", tab_fish:"Your catch",
       fish_none:"Nothing came up this round — aim for a column with more fish.",
       fish_count:"×{n}",
@@ -608,6 +610,7 @@
     king:   { name:"鱼王",     en:"Fish King",     score:400,  pull:120, depth:[0.60,0.95], hw:60, hh:36, lo:76, w:3,  art:"fish",  move:"swim", len:110, color:"#ffe14d", fin:"#d99b12", crown:true },
     chest:  { name:"宝箱",     en:"Treasure Chest",     score:500,  pull:100, depth:[0.55,0.95], hw:31, hh:26, lo:44, w:0,  art:"chest", move:"rise"  },
     angler: { name:"深海灯笼鱼", en:"Anglerfish",score:650,  pull:110, depth:[0.74,0.98], hw:46, hh:28, lo:52, w:3,  art:"angler",move:"swim"  },
+    shark:  { name:"鲨鱼",     en:"Shark",      score:380,  pull:130, depth:[0.28,0.80], hw:62, hh:26, lo:42, w:5,  art:"shark", move:"hunt", len:118, color:"#8496a8", fin:"#5d6f80" },
     boss:   { name:"深海巨兽", en:"Deep-Sea Beast", score:1000, pull:55,  depth:[0.86,0.99], hw:100,hh:60, lo:78, w:0,  art:"boss",  move:"swim"  },
     /* 危险物：不给分、清连击，而且很沉 —— 于是「这一竖排干不干净」成了要看清的事 */
     boot:   { name:"破靴子",   en:"Old Boot",   score:0,    pull:200, depth:[0.30,0.95], hw:24, hh:26, lo:36, w:7,  art:"boot",  move:"coin",
@@ -787,6 +790,8 @@
                en:"Real wreck chests are rarely empty — but what's inside is usually ballast, pottery and nails. Gold is the exception." },
     angler:  { zh:"只有雌性深海鮟鱇有那盏灯，光来自灯里共生的发光细菌。有些种类的雄鱼小得多，会一辈子附在雌鱼身上。",
                en:"Only female deep-sea anglerfish have the lure, lit by symbiotic bacteria living inside it. In some species the tiny male attaches to her for life." },
+    shark:   { zh:"鲨鱼没有一根骨头，骨架整个是软骨。牙齿一辈子不停往前换，有的种类一生能换掉上万颗。",
+               en:"Sharks have no bones at all — the whole skeleton is cartilage. Teeth keep conveyor-belting forward; some species go through tens of thousands in a lifetime." },
     boss:    { zh:"传说里的海怪多半来自真实的大王乌贼 —— 有记录的个体连触腕长约 13 米，而人类第一次拍到活体是 2004 年。",
                en:"Sea-monster legends mostly trace back to the giant squid — recorded at about 13 m including tentacles, and first photographed alive in 2004." },
     crab:    { zh:"螃蟹横着走是因为腿关节只能前后弯。它们用鳃呼吸，只要鳃还湿着就能在岸上待一阵。",
@@ -826,6 +831,7 @@
     { id:"allpw",   zh:"一局用齐 4 种道具",   en:"All four power-ups in one round", test:r => r.powersUsed >= 4 },
     { id:"dexall",  zh:"集齐图鉴",           en:"Complete the bestiary",     test:r => seen.size >= KIND_IDS.length },
     { id:"chest3",  zh:"一局钓 3 个宝箱",     en:"3 chests in one round",     test:r => (r.caught.chest || 0) >= 3 },
+    { id:"fatshark",zh:"钓上一条吃饱的鲨鱼",   en:"Land a well-fed shark",     test:r => (r.sharkMeals || 0) >= 4 },
     { id:"mpwin",   zh:"联机拿第一",         en:"Win an online round",       test:r => r.mpRank === 1 && r.mpPlayers > 1 },
     { id:"daily5",  zh:"完成 5 次每日挑战",   en:"5 daily challenges",        test:r => dailyRec.plays >= 5 },
   ];
@@ -998,7 +1004,7 @@
     const k   = KINDS[id];
     const dir = gRnd() < 0.5 ? 1 : -1;
     const sp  = { coin:[12,28], swim:[24,64], drift:[6,14], paddle:[16,28],
-                  jet:[26,46], crawl:[26,44], rise:[8,16] }[k.move] || [20, 50];
+                  jet:[26,46], crawl:[26,44], rise:[8,16], hunt:[32,52] }[k.move] || [20, 50];
     const it = {
       id, kind:k, dir,
       x: dir === 1 ? -k.hw * 2 : W + k.hw * 2,
@@ -1007,8 +1013,11 @@
       wob: Math.random() * Math.PI * 2,
       t: 0,
       // 会游出画面的自然离场；漂着不动的给个寿命，免得海里越堆越满
-      life: ["coin", "drift", "rise", "crawl"].includes(k.move) ? grand(13, 20) : Infinity,
+      // 会游出画面的自然离场；漂着不动的、以及会掉头追猎物的给个寿命，免得海里越堆越满
+      life: ["coin", "drift", "rise", "crawl"].includes(k.move) ? grand(13, 20)
+          : k.move === "hunt" ? grand(24, 34) : Infinity,
       dart: 0,
+      meals: 0, chomp: 0,                            // 吃了几条 / 咬合动画计时
     };
     // 小鱼常常成群出现
     if ((id === "small" || id === "clown") && gRnd() < 0.55) {
@@ -1084,7 +1093,8 @@
     powers = { magnet: 0, bighook: 0, turbo: 0 };
     inkT = 0; inkBlobs.length = 0; emotes.clear();
     powersSeen.clear();
-    roundStat = { maxChain:0, maxCombo:0, powersUsed:0, score:0, mineHits:0, scene, caught:{}, mpRank:0, mpPlayers:0 };
+    roundStat = { maxChain:0, maxCombo:0, powersUsed:0, score:0, mineHits:0, scene, caught:{},
+                  mpRank:0, mpPlayers:0, sharkMeals:0 };
     rollMissions();
     if (!online) { setScene(pickScene()); announceScene(); }
     el.stage.classList.remove("fever");
@@ -1198,7 +1208,8 @@
   let lastGotA = [];                               // 这一局刚解锁的成就 id，重画结算页时要用
 
   // 这一局的统计，成就判定只看它
-  let roundStat = { maxChain:0, maxCombo:0, powersUsed:0, score:0, mineHits:0, scene:"day", caught:{}, mpRank:0, mpPlayers:0 };
+  let roundStat = { maxChain:0, maxCombo:0, powersUsed:0, score:0, mineHits:0, scene:"day", caught:{},
+                    mpRank:0, mpPlayers:0, sharkMeals:0 };
   const powersSeen = new Set();
 
   function paintAchvLine() {
@@ -1263,7 +1274,15 @@
     }
   }
   // 钓上大货多给时间：真正的代价是时间，所以大货必须把时间还回来一部分
-  const timeBonus = k => k.score >= 400 ? 3 : k.score >= 150 ? 2 : k.score >= 60 ? 1 : 0;
+  /* 鲨鱼是唯一「身价会变」的目标：每吃掉一条小鱼就多值 MEAL_VALUE 分。
+     所以凡是要问「这东西值多少」的地方都走 itemScore(it)，不能再直接读 kind.score。 */
+  const MEAL_VALUE = 70, MAX_MEALS = 6;
+  const itemScore = it => it.kind.score + (it.meals || 0) * MEAL_VALUE;
+  const timeBonus = it => { const v = itemScore(it);
+    return v >= 400 ? 3 : v >= 150 ? 2 : v >= 60 ? 1 : 0; };
+
+  // 鲨鱼吃什么：只吃比自己小得多的游鱼，宝箱 / 道具 / 危险物 / 巨兽都不碰
+  const PREY = { small:1, clown:1, medium:1, big:1, jelly:1, squid:1 };
 
   function cast(x) {
     if (state !== "playing" || spectating) return;   // 观众没有钩子
@@ -1286,7 +1305,7 @@
   function startStruggle(it) {
     struggle = {
       pos: 0.5, dir: Math.random() < 0.5 ? 1 : -1,
-      speed: 0.5 + it.kind.score / 2200,           // 越值钱指针跑越快
+      speed: 0.5 + itemScore(it) / 2200,          // 越值钱指针跑越快
       zone: 0.17, boost: 0, stall: 0, hits: 0,
       name: kindName(it.id),
     };
@@ -1359,8 +1378,8 @@
     hook.pull = pullSpeed();                       // 越串越沉
     roundStat.maxChain = Math.max(roundStat.maxChain, hook.catches.length);
     const n = hook.catches.length;
-    beep(hit.kind.score >= 400 ? 990 : 430 + n * 70, 0.1, "square", 0.04);
-    if (!spectating && hit.kind.score >= 400) startStruggle(hit);
+    beep(itemScore(hit) >= 400 ? 990 : 430 + n * 70, 0.1, "square", 0.04);
+    if (!spectating && itemScore(hit) >= 400) startStruggle(hit);
     if (hit.id === "boss")   pop(hook.x, hook.y - 60, t("pop_boss"), "#ff9f6b", 20);
     if (hit.id === "angler") pop(hook.x, hook.y - 50, t("pop_rare"), "#ffe07a", 19);
     if (n >= 2) pop(hook.x, hook.y - 34, t("pop_chain", { n }), "#ffd24a", 19);
@@ -1449,8 +1468,8 @@
         pop(hook.x, SEA_Y + 24, t("pop_empty"), "#9fc0d4", 20);
         beep(180, 0.14, "square", 0.03);
       } else {
-        const biggest = list.reduce((a, b) => b.kind.score > a.kind.score ? b : a, list[0]);
-        splash(hook.x, SEA_Y, biggest.kind.score >= 400 ? 24 : 12 + list.length * 3,
+        const biggest = list.reduce((a, b) => itemScore(b) > itemScore(a) ? b : a, list[0]);
+        splash(hook.x, SEA_Y, itemScore(biggest) >= 400 ? 24 : 12 + list.length * 3,
                biggest.kind.color || "#ffd24a");
         beep(820, 0.12, "triangle", 0.05);
       }
@@ -1473,12 +1492,12 @@
           hazardHit(it, hook.x, SEA_Y + 16 + i * 22);
           return;
         }
-        const gained = Math.round(it.kind.score * comboMult() * (fever ? FEVER_MULT : 1));
+        const gained = Math.round(itemScore(it) * comboMult() * (fever ? FEVER_MULT : 1));
         score += gained;
         combo++;                                   // 一串里每一个都算一次连击
         roundStat.maxCombo = Math.max(roundStat.maxCombo, combo);
         total += gained;
-        bonusSec += timeBonus(it.kind);
+        bonusSec += timeBonus(it);
         caught[it.id] = (caught[it.id] || 0) + 1;
         earned[it.id] = (earned[it.id] || 0) + gained;
         if (!seen.has(it.id)) {                    // 图鉴新解锁
@@ -1487,7 +1506,8 @@
           try { localStorage.setItem(SEEN_KEY, JSON.stringify([...seen])); } catch (_) {}
           pop(hook.x, SEEN_POP_Y, t("pop_dex", { name: kindName(it.id) }), "#9be7ff", 20);
         }
-        if (it.kind.score > biggest.kind.score) biggest = it;
+        if (itemScore(it) > itemScore(biggest)) biggest = it;
+        if (it.id === "shark") roundStat.sharkMeals = Math.max(roundStat.sharkMeals || 0, it.meals || 0);
         missionEvent({ kind: it.id, chain: list.length, combo, fever });
         if (it.id === "puffer") applyBurst("puffer", it.x, it.y);
         if (it.kind.power) activatePower(it.id, hook.x, SEA_Y + 16 + i * 22);
@@ -1510,9 +1530,9 @@
         clearTimeout(land.boostT);
         land.boostT = setTimeout(() => el.timeBoard.classList.remove("boost"), 700);
       }
-      splash(hook.x, SEA_Y, biggest.kind.score >= 400 ? 24 : 12 + list.length * 3,
+      splash(hook.x, SEA_Y, itemScore(biggest) >= 400 ? 24 : 12 + list.length * 3,
              biggest.kind.color || "#ffd24a");
-      biggest.kind.score >= 400 || list.length >= 3
+      itemScore(biggest) >= 400 || list.length >= 3
         ? fanfare() : beep(820, 0.12, "triangle", 0.05);
     }
     hook.catches = [];
@@ -1557,6 +1577,29 @@
         it.y  = FLOOR_Y - 14 + Math.abs(Math.sin(it.t * 6)) * 3;
         if (it.x < 26 || it.x > W - 26) it.vx *= -1;
         break;
+      case "hunt": {                                  // 鲨鱼：巡游 → 盯上猎物 → 冲过去吃掉
+        it.chomp = Math.max(0, it.chomp - dt);
+        let prey = null, best = 300;                  // 300px 以内才会去追
+        for (const o of items) {
+          if (o === it || !PREY[o.id]) continue;
+          const d = Math.hypot(o.x - it.x, o.y - it.y);
+          if (d < best) { best = d; prey = o; }
+        }
+        if (prey && it.meals < MAX_MEALS) {
+          const dx = prey.x - it.x, dy = prey.y - it.y;
+          const d  = Math.max(1, Math.hypot(dx, dy));
+          const sp = 96;                              // 追击时比巡游快
+          it.x += (dx / d) * sp * dt;
+          it.y += (dy / d) * sp * dt;
+          it.vx = dx >= 0 ? Math.abs(it.vx) : -Math.abs(it.vx);   // 朝着猎物那边画
+          if (d < it.kind.hw * 0.55) eatPrey(it, prey);
+        } else {
+          it.x += it.vx * dt;                         // 没目标就正常巡游
+          it.y += Math.sin(it.t * 0.9) * 12 * dt;
+        }
+        it.y = clamp(it.y, TOP + 30, FLOOR_Y - 30);
+        break;
+      }
       case "rise":                                    // 宝箱：缓缓上浮
         it.x += it.vx * dt;
         it.y -= 6 * dt;
@@ -1564,6 +1607,21 @@
       default:                                        // 游鱼
         it.x += it.vx * dt;
     }
+  }
+
+  /* 鲨鱼吃掉一条鱼：那条鱼从海里消失（玩家真的少了一个目标），
+     鲨鱼身价 +MEAL_VALUE 并且长大一点 —— 所以「先让它吃饱再钓」是划算的赌博：
+     等得越久它越值钱，但小鱼也被它吃得越少。 */
+  function eatPrey(shark, prey) {
+    const i = items.indexOf(prey);
+    if (i < 0) return;
+    items.splice(i, 1);
+    shark.meals = Math.min(MAX_MEALS, (shark.meals || 0) + 1);
+    shark.chomp = 0.28;
+    splash(prey.x, prey.y, 9, prey.kind.color || "#cfe6f2");
+    pop(prey.x, prey.y - 16, t("pop_eaten", { name: kindName(prey.id) }), "#ff9f6b", 17);
+    beep(150, 0.13, "sawtooth", 0.05);
+    setTimeout(() => beep(110, 0.1, "sawtooth", 0.04), 70);
   }
 
   function update(dt) {
@@ -1867,6 +1925,73 @@
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "#14212a";
     ctx.beginPath(); ctx.arc(x + r * 0.3 * look, y, Math.max(1.2, r * 0.45), 0, Math.PI * 2); ctx.fill();
+  }
+
+  function artShark(it) {                                // 鲨鱼：吃得越多画得越大
+    const k = it.kind;
+    const g = 1 + (it.meals || 0) * 0.055;               // 每吃一条胖一点
+    ctx.scale(g, g);
+    const L = k.len, hh = L * 0.23;
+    const sw = Math.sin(it.wob * 0.8) * (L * 0.05);      // 尾巴摆动
+
+    ctx.fillStyle = k.fin;
+    ctx.beginPath();                                     // 新月形尾鳍
+    ctx.moveTo(-L * 0.42, 0);
+    ctx.lineTo(-L * 0.66, -hh * 1.5 + sw);
+    ctx.quadraticCurveTo(-L * 0.56, 0, -L * 0.66, hh * 1.2 + sw);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();                                     // 高背鳍 —— 鲨鱼的招牌
+    ctx.moveTo(-L * 0.02, -hh * 0.9);
+    ctx.lineTo(L * 0.10, -hh * 2.25);
+    ctx.lineTo(L * 0.20, -hh * 0.85);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();                                     // 胸鳍
+    ctx.moveTo(L * 0.10, hh * 0.5);
+    ctx.lineTo(L * 0.02, hh * 1.7);
+    ctx.lineTo(L * 0.24, hh * 0.7);
+    ctx.closePath(); ctx.fill();
+
+    ctx.fillStyle = k.color;                             // 身体：前粗后细的梭形
+    ctx.beginPath();
+    ctx.moveTo(L * 0.5, 0);
+    ctx.quadraticCurveTo(L * 0.22, -hh * 1.05, -L * 0.16, -hh * 0.72);
+    ctx.quadraticCurveTo(-L * 0.34, -hh * 0.4, -L * 0.42, 0);
+    ctx.quadraticCurveTo(-L * 0.34, hh * 0.4, -L * 0.16, hh * 0.72);
+    ctx.quadraticCurveTo(L * 0.22, hh * 1.05, L * 0.5, 0);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(255,255,255,.82)";             // 白肚皮
+    ctx.beginPath();
+    ctx.moveTo(L * 0.42, hh * 0.16);
+    ctx.quadraticCurveTo(L * 0.1, hh * 1.0, -L * 0.16, hh * 0.66);
+    ctx.quadraticCurveTo(L * 0.1, hh * 0.4, L * 0.42, hh * 0.16);
+    ctx.fill();
+
+    ctx.strokeStyle = "rgba(0,0,0,.22)"; ctx.lineWidth = 1.6;   // 鳃裂
+    for (let i = 0; i < 4; i++) {
+      const gx = L * 0.2 - i * L * 0.045;
+      ctx.beginPath();
+      ctx.moveTo(gx, -hh * 0.42); ctx.lineTo(gx - L * 0.015, hh * 0.28); ctx.stroke();
+    }
+
+    const open = it.chomp > 0 ? hh * 0.62 : hh * 0.16;   // 咬的瞬间张嘴
+    ctx.strokeStyle = "#2b3946"; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(L * 0.5, hh * 0.02);
+    ctx.quadraticCurveTo(L * 0.36, open, L * 0.2, open * 0.75);
+    ctx.stroke();
+    ctx.fillStyle = "#fff";                              // 牙
+    for (let i = 0; i < 5; i++) {
+      const tx = L * 0.46 - i * L * 0.055, ty = hh * 0.05 + open * 0.35 * (i / 5 + 0.3);
+      ctx.beginPath();
+      ctx.moveTo(tx, ty); ctx.lineTo(tx - 2.4, ty + 4.2); ctx.lineTo(tx + 2.4, ty + 4.2);
+      ctx.closePath(); ctx.fill();
+    }
+
+    ctx.fillStyle = "#fff";                              // 眼
+    ctx.beginPath(); ctx.arc(L * 0.3, -hh * 0.28, 3.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#10202c";
+    ctx.beginPath(); ctx.arc(L * 0.31, -hh * 0.28, 2, 0, Math.PI * 2); ctx.fill();
   }
 
   function artFish(it) {                                 // 通用鱼：小丑鱼/蓝鱼/黄金鱼/大红鱼/鱼王
@@ -2237,7 +2362,7 @@
     }
   }
 
-  const ART = { ink:artInk, magnet:artMagnet, bighook:artBighook, watch:artWatch, turbo:artTurbo,
+  const ART = { shark:artShark, ink:artInk, magnet:artMagnet, bighook:artBighook, watch:artWatch, turbo:artTurbo,
                 boot:artBoot, mine:artMine, fish:artFish, sword:artSword, angler:artAngler, boss:artBoss, squid:artSquid,
                 turtle:artTurtle, jelly:artJelly, puffer:artPuffer, crab:artCrab,
                 coin:artCoin, chest:artChest };
@@ -2295,13 +2420,13 @@
     const queue = items.concat(hook.catches)
       .filter(it => it.y > SEA_Y + 4)
       // 危险物排最前：看清水雷比看清小鱼分数更重要
-      .sort((a, b) => (b.kind.hazard ? 1e6 : b.kind.score) - (a.kind.hazard ? 1e6 : a.kind.score));
+      .sort((a, b) => (b.kind.hazard ? 1e6 : itemScore(b)) - (a.kind.hazard ? 1e6 : itemScore(a)));
     for (const it of queue) {
       const x = it.x, y = it.y - it.kind.lo;
       if (taken.some(l => Math.abs(l.x - x) < 34 && Math.abs(l.y - y) < 19)) continue;
       taken.push({ x, y });
       ctx.globalAlpha = it.life < 3 && Math.floor(it.life * 6) % 2 === 0 ? 0.5 : 1;
-      drawValue(x, y, it.kind.label != null ? it.kind.label : it.kind.score, it.kind.labelColor);
+      drawValue(x, y, it.kind.label != null ? it.kind.label : itemScore(it), it.kind.labelColor);
       ctx.globalAlpha = 1;
     }
   }
