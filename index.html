@@ -74,10 +74,14 @@
 
   .overlay{
     position:absolute;inset:0;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;gap:10px;text-align:center;
+    align-items:center;justify-content:flex-start;gap:10px;text-align:center;
     background:rgba(3,16,28,.76);backdrop-filter:blur(2px);
     cursor:pointer;padding:18px;overflow:auto;
   }
+  /* 内容比机台还高时（iPad 横屏、矮窗口），justify-content:center 会把顶部裁掉
+     而且滚不上去 —— flexbox 的老毛病。用两个可压缩的伪元素当弹簧：
+     有余量就把内容顶到正中间，没余量就缩成 0，内容从顶部开始、能正常滚。 */
+  .overlay::before, .overlay::after{content:"";flex:1 1 0;min-height:0}
   .overlay.hidden{display:none}
   .banner{
     background:linear-gradient(180deg,#ff6b4a,#d8341c);
@@ -147,13 +151,17 @@
   /* 全屏（或不支持全屏 API 时的沉浸模式）：收起标题和说明，
      用 flex 让画布吃掉 HUD 之外的全部高度 —— 不要按 vh 算高度再祈祷放得下，
      那样 HUD 一换行就会把机台顶出屏幕。 */
+  /* iOS / iPadOS 的 100vh 是「不含工具栏」的那个大高度，直接用会把机台底部顶出屏幕。
+     dvh 才是当前真正可见的高度；不认识 dvh 的浏览器会忽略后一行，退回 vh。 */
   body.immersive{padding:0;height:100vh;overflow:hidden;justify-content:flex-start}
+  body.immersive{height:100dvh}
   body.immersive .title,
   body.immersive .tip{display:none}
   body.immersive .wrap{
     width:100vw;max-width:100vw;height:100vh;
     display:flex;flex-direction:column;gap:4px;padding:5px;
   }
+  body.immersive .wrap{height:100dvh}
   body.immersive .hud{flex:0 0 auto;flex-wrap:nowrap;margin:0;align-self:center;justify-content:center}
   body.immersive .board{max-width:230px}
   body.immersive .board{padding:4px 6px}
@@ -2896,24 +2904,41 @@
     resizeCanvas();                                  // 尺寸变了就重算内部分辨率，别被拉虚
   }
 
+  /* 这台设备到底允不允许元素全屏。iPad Safari 上 webkitRequestFullscreen 这个方法
+     是存在的，但 fullscreenEnabled 可能是 false，调下去**既不报错也不进全屏** ——
+     所以「方法存在」不能当成「能用」，只看 enabled 也不够，最后还得回头验一次。 */
+  const fsAllowed = () => {
+    if (document.fullscreenEnabled !== undefined) return !!document.fullscreenEnabled;
+    if (document.webkitFullscreenEnabled !== undefined) return !!document.webkitFullscreenEnabled;
+    const root = document.documentElement;
+    return !!(root.requestFullscreen || root.webkitRequestFullscreen);
+  };
+
   async function toggleFullscreen() {
     try {
       if (isFs()) {
         await (document.exitFullscreen ? document.exitFullscreen()
              : document.webkitExitFullscreen && document.webkitExitFullscreen());
         manualIm = false;
-      } else {
-        const root = document.documentElement;
-        const req = root.requestFullscreen || root.webkitRequestFullscreen;
-        if (req) {
-          await req.call(root);
-          try { await screen.orientation.lock("portrait"); } catch (_) {}   // 竖屏游戏，能锁就锁
-        } else {
-          manualIm = true;                           // 不支持全屏 API
-        }
+        syncImmersive();
+        return;
       }
+      if (manualIm) { manualIm = false; syncImmersive(); return; }   // 沉浸模式下再按一次 = 退出
+
+      const root = document.documentElement;
+      const req = root.requestFullscreen || root.webkitRequestFullscreen;
+      if (!fsAllowed() || !req) { manualIm = true; syncImmersive(); return; }
+
+      try { await req.call(root); } catch (_) {}      // 前缀版不返回 Promise，await 也无妨
+      try { await screen.orientation.lock("portrait"); } catch (_) {}   // 竖屏游戏，能锁就锁
+
+      /* 关键的一步：等两帧看真的进去了没有。
+         iPad 那种静默失败在这里会露馅 —— 露馅就退回沉浸模式，
+         而不是让玩家按了按钮却什么都没发生。 */
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      if (!isFs()) manualIm = true;
     } catch (_) {
-      manualIm = !manualIm;                          // 被拒（iOS / 权限）就用沉浸模式
+      manualIm = true;                                // 被拒（iOS / 权限）就用沉浸模式
     }
     syncImmersive();
   }
@@ -2923,11 +2948,18 @@
   document.addEventListener("webkitfullscreenchange", syncImmersive);
 
   let resizePending = false;                         // 窗口尺寸变化后重算一次
-  window.addEventListener("resize", () => {
+  const onResize = () => {
     if (resizePending) return;
     resizePending = true;
     requestAnimationFrame(() => { resizePending = false; resizeCanvas(); });
-  });
+  };
+  window.addEventListener("resize", onResize);
+  window.addEventListener("orientationchange", onResize);
+  // iOS 收起 / 展开地址栏时可见高度变了，但不一定发 window 的 resize
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", onResize);
+    window.visualViewport.addEventListener("scroll", onResize);
+  }
 
   // ───────────────────────── 输入 ─────────────────────────
   const canvasX = clientX => {
