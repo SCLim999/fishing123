@@ -27,7 +27,29 @@ https://treasure-cove-mp.<你的子域>.workers.dev
 > 部署得靠上面这两条命令，后台的「Create application」建不出这个 Worker：
 > 它需要仓库里的代码，还需要一个 Durable Object 绑定。
 
-## 没有电脑时（在后台的在线编辑器里粘贴部署）
+## 只有手机时（让 GitHub Actions 代替你的电脑部署）
+
+想跨不同网络一起玩就必须部署这个 Worker，但部署命令要 Node。手上只有手机的话，
+让 GitHub 帮你跑 —— 仓库里的 `.github/workflows/deploy-worker.yml` 就是干这个的，
+**只能手动触发**，push 不会自动跑。全程在手机浏览器里点：
+
+1. **拿 API Token**：Cloudflare 后台右上头像 → My Profile → API Tokens → Create Token
+   → 选 **Edit Cloudflare Workers** 模板 → Continue → Create Token → **把那串复制下来**（只显示一次）。
+2. **拿 Account ID**：Workers & Pages 页面右侧就有；或者看地址栏 `dash.cloudflare.com/<这一长串>` 里那段。
+3. **存进仓库**：GitHub 仓库 → Settings → Secrets and variables → Actions → New repository secret，
+   加两条（名字要一模一样）：
+   - `CLOUDFLARE_API_TOKEN` = 第 1 步那串
+   - `CLOUDFLARE_ACCOUNT_ID` = 第 2 步那串
+4. **跑**：仓库 → Actions → 左边选 **Deploy multiplayer worker** → **Run workflow**。
+5. 跑完点进日志，「部署」那一步里有一行 `https://treasure-cove-mp.<你的子域>.workers.dev`
+   —— 那就是联机服务器地址。
+
+Secret 没配好的话第一步就会明确报「缺哪个」；配好了会先空跑一遍检查配置，
+有问题不会推上线。以后改了 `server/room.mjs`，再点一次 Run workflow 就是重新部署。
+
+Token 是写权限，别贴到聊天里或截图 —— 泄漏了就到 Cloudflare 后台 Roll / Delete 掉重建。
+
+## 没有电脑、也不想用 Actions（在后台的在线编辑器里粘贴部署）
 
 只有手机、装不了 Node 的话，可以走这条路 —— 比命令行麻烦得多，能用电脑就别走这条。
 
