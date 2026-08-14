@@ -773,10 +773,17 @@
      两个声部：三角波旋律 + 方波低音，各自按拍推进；FEVER 时整体加快 15%。
      浏览器在用户操作前不让出声，所以只在点过按钮 / 点过画面之后才真正开始。 */
   const MUSIC_KEY = "treasureCove.music.v1";
+  /* 背景曲：Aetheric —「Snap Crackle」（Free To Use / freetouse.com）。
+     文件只在玩家真的打开音乐时才去下载 —— 不开音乐的人一个字节都不用付。
+     加载失败（离线、404、被 CSP 拦掉）就自动退回下面那段现场合成的小调，音乐不会哑掉。
+     打包成 Artifact 那种单文件页面时，构建脚本会把这里换成 data: URI。 */
+  const BGM_SRC   = "assets/bgm.mp3";
+  const BGM_TRACK = { title:"Snap Crackle", artist:"Aetheric", from:"freetouse.com" };
   const MEL  = [[69,1],[74,1],[72,.5],[70,.5],[69,1],[67,1],[65,1],[67,1],
                 [69,1],[70,1],[72,1],[70,1],[69,1],[67,1],[65,3]];
   const BASS = [[38,2],[38,2],[45,2],[45,2],[46,2],[46,2],[45,1],[43,1],[45,2]];
-  const BGM = { on:false, timer:null, mi:0, mt:0, bi:0, bt:0, gain:null };
+  const BGM = { on:false, timer:null, mi:0, mt:0, bi:0, bt:0, gain:null,
+                el:null, synth:false };      // el = <audio>；synth = 退回合成小调
   try { BGM.on = localStorage.getItem(MUSIC_KEY) === "1"; } catch (_) {}
 
   const midiHz = n => 440 * Math.pow(2, (n - 69) / 12);
@@ -810,6 +817,38 @@
 
   function bgmStart() {
     if (!BGM.on) return;
+    if (BGM_SRC && !BGM.synth) { bgmFile(); return; }
+    bgmSynthStart();
+  }
+
+  /* mp3 那条路。浏览器在用户操作过之前不给放，play() 会 reject —— 那不是错误，
+     等下一次交互再试就好，所以只在「确实加载不出来」时才退回合成。 */
+  function bgmFile() {
+    try {
+      if (!BGM.el) {
+        BGM.el = new Audio();
+        BGM.el.src = BGM_SRC;
+        BGM.el.loop = true;
+        BGM.el.volume = 0.42;                    // 别压过音效
+        BGM.el.preload = "auto";
+        BGM.el.addEventListener("error", () => { // 文件真的取不到 → 换合成
+          BGM.el = null;
+          BGM.synth = true;
+          if (BGM.on) bgmSynthStart();
+        });
+      }
+      bgmRate();
+      const pr = BGM.el.play();
+      if (pr && pr.catch) pr.catch(() => {});    // 还没有用户手势，等下次
+    } catch (_) { BGM.synth = true; bgmSynthStart(); }
+  }
+
+  function bgmRate() {                            // FEVER 时曲子跟着快一点
+    if (!BGM.el) return;
+    try { BGM.el.playbackRate = fever ? 1.12 : 1; } catch (_) {}
+  }
+
+  function bgmSynthStart() {
     try {
       audio = audio || new (window.AudioContext || window.webkitAudioContext)();
       if (audio.state === "suspended") audio.resume();
@@ -830,7 +869,10 @@
     clearInterval(BGM.timer);
     BGM.timer = null;
     if (BGM.gain) try { BGM.gain.gain.value = 0; } catch (_) {}
+    if (BGM.el) try { BGM.el.pause(); } catch (_) {}
   }
+
+  const bgmPlaying = () => !!BGM.timer || !!(BGM.el && !BGM.el.paused);
 
   function fanfare() {
     [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, 0.13, "triangle", 0.05), i * 90));
@@ -1454,6 +1496,7 @@
     // 所以它永远是「最后一段」，不会被大货把时间顶回去而反复开关
     if (!fever && timeLeft <= feverAt()) {
       fever = true;
+      bgmRate();
       pop(W / 2, SEA_Y + 90, t("pop_fever"), "#ffb35e", 27);
       el.stage.classList.add("fever");
       [660, 830, 990, 1240].forEach((f, i) => setTimeout(() => beep(f, 0.16, "square", 0.05), i * 80));
@@ -2565,6 +2608,7 @@
         coop = !!m.coop; coopTarget = m.target || 0; coopTeam = m.team || 0;
         if (m.fever !== fever) {
           fever = m.fever;
+          bgmRate();
           el.stage.classList.toggle("fever", fever);
           if (fever) {
             pop(W / 2, SEA_Y + 90, t("pop_fever"), "#ffb35e", 27);
@@ -3048,7 +3092,7 @@
   });
   // 浏览器要等用户先动一下才让出声：开关记住了，第一次交互时补上
   ["pointerdown", "keydown"].forEach(ev => {
-    const once = () => { window.removeEventListener(ev, once); if (BGM.on && !BGM.timer) bgmStart(); };
+    const once = () => { window.removeEventListener(ev, once); if (BGM.on && !bgmPlaying()) bgmStart(); };
     window.addEventListener(ev, once);
   });
 
