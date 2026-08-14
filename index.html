@@ -350,6 +350,10 @@
       daily_note:"全世界今天是同一片海（同样的鱼群、天色、任务）—— 比分数。局时固定 60s。",
       daily_best:"今日最佳 {n}（第 {p} 次）", daily_none:"今天还没挑战过",
       share_daily:"每日挑战 {date}",
+      pw_magnet:"🧲 磁铁　金币被吸过来", pw_bighook:"⚓ 大钩　命中范围变大",
+      pw_turbo:"⚡ 快收线", pw_watch:"⏱ 怀表　+5 秒",
+      burst_puffer:"河豚炸了！周围的鱼被震晕", burst_mine:"轰！鱼被炸散了",
+      school:"🐟 鱼阵来了！",
       sc_day:"☀️ 晴天", sc_dusk:"🌇 黄昏", sc_night:"🌙 夜钓　只有会发光的看得清", sc_storm:"⛈️ 暴风雨　船摇得厉害",
       pop_stolen:"被抢走了！", pop_won:"抢到了！", pop_boss_spawn:"深海巨兽出现！",
       pop_fever:"FEVER！得分 ×1.5", hud_fever:"FEVER ×1.5", hud_combo:"连击 ×{c}　得分 ×{m}",
@@ -402,6 +406,10 @@
       daily_note:"Everyone gets the same sea today — same fish, weather and missions. Fixed 60s round.",
       daily_best:"Today's best {n} (run {p})", daily_none:"Not played today yet",
       share_daily:"Daily {date}",
+      pw_magnet:"🧲 Magnet　coins come to you", pw_bighook:"⚓ Big hook　wider reach",
+      pw_turbo:"⚡ Fast reel", pw_watch:"⏱ Pocket watch　+5s",
+      burst_puffer:"The puffer popped! Nearby fish are stunned", burst_mine:"Boom! Fish blown away",
+      school:"🐟 A school arrives!",
       sc_day:"☀️ Clear", sc_dusk:"🌇 Dusk", sc_night:"🌙 Night dive　only glowing things show", sc_storm:"⛈️ Storm　the boat is rocking",
       pop_stolen:"Snatched away!", pop_won:"Got it first!", pop_boss_spawn:"A deep-sea beast appears!",
       pop_fever:"FEVER! Score ×1.5", hud_fever:"FEVER ×1.5", hud_combo:"Combo ×{c}　Score ×{m}",
@@ -480,6 +488,15 @@
     /* 危险物：不给分、清连击，而且很沉 —— 于是「这一竖排干不干净」成了要看清的事 */
     boot:   { name:"破靴子",   en:"Old Boot",   score:0,    pull:200, depth:[0.30,0.95], hw:24, hh:26, lo:36, w:7,  art:"boot",  move:"coin",
               hazard:true, label:"0",    labelColor:"#c9d6de" },
+    /* 道具：钓上来触发一段时间的效果（分数 0，本身不值钱） */
+    magnet: { name:"磁铁",     en:"Magnet",      score:0, pull:320, depth:[0.15,0.80], hw:23, hh:23, lo:34, w:4,
+              art:"magnet",  move:"coin", power:"magnet",  label:"🧲", labelColor:"#9be7ff" },
+    bighook:{ name:"大钩",     en:"Big Hook",    score:0, pull:320, depth:[0.20,0.85], hw:23, hh:23, lo:34, w:4,
+              art:"bighook", move:"coin", power:"bighook", label:"⚓", labelColor:"#9be7ff" },
+    watch:  { name:"怀表",     en:"Pocket Watch",score:0, pull:330, depth:[0.10,0.75], hw:22, hh:22, lo:32, w:4,
+              art:"watch",   move:"coin", power:"watch",   label:"⏱", labelColor:"#8bf5a8" },
+    turbo:  { name:"浮标",     en:"Turbo Float", score:0, pull:340, depth:[0.08,0.60], hw:22, hh:22, lo:32, w:4,
+              art:"turbo",   move:"coin", power:"turbo",   label:"⚡", labelColor:"#ffd24a" },
     mine:   { name:"水雷",     en:"Sea Mine",     score:0,    pull:260, depth:[0.20,0.90], hw:26, hh:26, lo:38, w:6,  art:"mine",  move:"coin",
               hazard:true, penalty:3, label:"-3s", labelColor:"#ff8a7a" },
   };
@@ -543,7 +560,7 @@
   let newSeen = [];                             // 本局新解锁的
   let items = [], bubbles = [], pops = [], sparks = [];
   let hook = { state:"idle", x:W/2, y:SEA_Y, catches:[], pull:0 };
-  let spawnTimer = 0, chestTimer = 5, bossTimer = 18, waveT = 0, bob = 0;
+  let spawnTimer = 0, chestTimer = 5, bossTimer = 18, schoolTimer = 14, waveT = 0, bob = 0;
   let bonusGiven = 0;                              // 本局已发放的奖励时间
   let online = false;                              // 联机模式：世界由服务器说了算
   let spectating = false;                          // 观战：只看不钓
@@ -682,6 +699,25 @@
     return it;
   }
 
+  /** 鱼阵：一队同深度、同速度的小鱼排成一列 —— 专门制造「一钩串满」的时刻 */
+  function spawnSchool() {
+    const id  = gRnd() < 0.5 ? "small" : "clown";
+    const k   = KINDS[id];
+    const dir = gRnd() < 0.5 ? 1 : -1;
+    const n   = Math.round(grand(9, 14));
+    const y   = TOP + grand(0.15, 0.55) * SPAN;
+    const vx  = grand(38, 58) * dir;
+    const gap = grand(38, 52);
+    for (let i = 0; i < n; i++) {
+      items.push({
+        id, kind: k, dir, x: (dir === 1 ? -40 : W + 40) - dir * i * gap,
+        y: y + Math.sin(i * 0.9) * 12, vx,
+        wob: i * 0.5, t: 0, life: Infinity, dart: 0, stun: 0,
+      });
+    }
+    pop(W / 2, SEA_Y + 150, t("school"), "#7fd3ff", 19);
+  }
+
   function spawnRandom() {
     let r = gRnd() * POOL_TOTAL, id = POOL[0];
     for (const k of POOL) { if ((r -= KINDS[k].w) <= 0) { id = k; break; } }
@@ -717,7 +753,9 @@
     // 每日挑战：整局世界都从今天的日期播种；平时用真随机
     gRnd = daily ? mulberry32(seedFromString("treasureCove-" + todayKey())) : Math.random;
     spawnTimer = 0; chestTimer = grand(4, 7); bossTimer = grand(15, 25);
+    schoolTimer = grand(10, 18);
     bonusGiven = 0; fever = false;
+    powers = { magnet: 0, bighook: 0, turbo: 0 };
     rollMissions();
     if (!online) { setScene(pickScene()); announceScene(); }
     el.stage.classList.remove("fever");
@@ -915,9 +953,10 @@
 
   // 空钩拉得飞快；挂上东西后取最难拉的那个，每多挂一个再慢一档
   function pullSpeed() {
-    if (!hook.catches.length) return 470;
+    const turbo = powers.turbo > 0 ? POWERS.turbo.mult : 1;
+    if (!hook.catches.length) return 470 * turbo;
     const slowest = Math.min(...hook.catches.map(c => c.kind.pull));
-    return Math.max(45, slowest * Math.pow(0.85, hook.catches.length - 1));
+    return Math.max(45, slowest * Math.pow(0.85, hook.catches.length - 1)) * turbo;
   }
 
   // 把串上的东西一个接一个挂在钩子下面
@@ -935,13 +974,15 @@
     if (hook.catches.length >= MAX_CHAIN) return false;
     let hit = null, bestD = Infinity;
     for (const it of items) {
-      const dx = (hook.x - it.x) / (it.kind.hw + 4), dy = (hook.y - it.y) / (it.kind.hh + 4);
+      const reach = powers.bighook > 0 ? POWERS.bighook.mult : 1;
+      const dx = (hook.x - it.x) / (it.kind.hw * reach + 4), dy = (hook.y - it.y) / (it.kind.hh * reach + 4);
       const d  = dx * dx + dy * dy;
       if (d <= 1 && d < bestD) { bestD = d; hit = it; }
     }
     if (!hit) return false;
     // 联机时先乐观挂上（手感优先），服务器说被别人抢先了再摘掉
-    if (online) NET.send({ t:"grab", id: hit.netId });
+    // 服务器只存出生参数、不模拟位置，所以爆点（河豚/水雷）必须由钓到的人上报
+    if (online) NET.send({ t:"grab", id: hit.netId, x: Math.round(hit.x), y: Math.round(hit.y) });
     items.splice(items.indexOf(hit), 1);
     hit.life = Infinity;                           // 钩住后不会消失
     hook.catches.push(hit);
@@ -974,6 +1015,41 @@
     }
   }
 
+  /* 钓到河豚会「砰」地炸开，把附近的鱼震晕几秒（静止 = 好钓）；
+     水雷炸开则把周围的鱼炸散。联机时所有人都在 grabbed 消息里收到同一个爆点，
+     各自用同一套规则算 —— 这样两边的鱼群不会走岔。 */
+  function applyBurst(kindId, bx, by) {
+    if (kindId === "puffer") {
+      let n = 0;
+      for (const it of items) {
+        if (Math.hypot(it.x - bx, it.y - by) < 170 && !it.kind.hazard) { it.stun = 3; n++; }
+      }
+      splash(bx, by, 16, "#f2e07a");
+      if (n) pop(bx, by - 30, t("burst_puffer"), "#f2e07a", 18);
+      beep(300, 0.18, "square", 0.05);
+    } else if (kindId === "mine") {
+      for (const it of items) {
+        const dx = it.x - bx, dy = it.y - by, d = Math.hypot(dx, dy);
+        if (d < 230 && d > 1) {
+          it.vx = (dx / d) * 150 + it.vx * 0.3;       // 往外炸散
+          it.y  = clamp(it.y + (dy / d) * 26, TOP, FLOOR_Y - 20);
+          it.stun = 0;
+        }
+      }
+      splash(bx, by, 26, "#ff8a7a");
+      pop(bx, by - 30, t("burst_mine"), "#ff8a7a", 18);
+    }
+  }
+
+  function activatePower(id, atX, atY) {
+    const k = KINDS[id], P = POWERS[k.power];
+    if (!P) return;
+    if (P.dur) powers[k.power] = Math.max(powers[k.power] || 0, P.dur);
+    if (P.time && !online) timeLeft = Math.min(99, timeLeft + P.time);   // 联机由服务器加时
+    pop(atX, atY, t("pw_" + k.power), k.labelColor || "#9be7ff", 20);
+    [720, 900, 1120].forEach((f, i) => setTimeout(() => beep(f, 0.1, "triangle", 0.045), i * 60));
+  }
+
   function land() {
     const list = hook.catches;
     if (online) {                                  // 得分在「钩到」那一刻就由服务器结算过了
@@ -1003,6 +1079,7 @@
         if (it.kind.hazard) {                      // 水雷 / 破靴子：不给分、连击清零
           combo = 0;
           if (it.kind.penalty) mineHits++;
+          applyBurst(it.id, it.x, it.y);
           hazardHit(it, hook.x, SEA_Y + 16 + i * 22);
           return;
         }
@@ -1021,6 +1098,8 @@
         }
         if (it.kind.score > biggest.kind.score) biggest = it;
         missionEvent({ kind: it.id, chain: list.length, combo, fever });
+        if (it.id === "puffer") applyBurst("puffer", it.x, it.y);
+        if (it.kind.power) activatePower(it.id, hook.x, SEA_Y + 16 + i * 22);
         const gtxt = t("pop_gain", { name: kindName(it.id), n: gained });
         if (list.length === 1) {
           pop(hook.x, SEA_Y + 16, gtxt, it.kind.color || "#ffd24a");
@@ -1056,11 +1135,17 @@
     it.t   += dt;
     it.wob += dt * 4;
     it.life -= dt;
+    if (it.stun > 0) { it.stun -= dt; return; }        // 被震晕：原地不动
 
     switch (it.kind.move) {
       case "coin":
         it.x += it.vx * dt;
         it.y += Math.sin(it.t * 1.6) * 14 * dt;
+        if (powers.magnet > 0 && (it.id === "coin" || it.kind.power)) {   // 磁铁把金币和道具吸过来
+          const dx = hook.x - it.x, dy = hook.y - it.y;
+          const d = Math.hypot(dx, dy);
+          if (d > 4 && d < 420) { it.x += (dx / d) * 200 * dt; it.y += (dy / d) * 200 * dt; }
+        }
         break;
       case "drift":                                   // 水母：一鼓一缩慢慢上浮
         it.y -= (10 + Math.sin(it.t * 2.2) * 8) * dt;
@@ -1092,6 +1177,7 @@
 
   function update(dt) {
     waveT += dt;
+    for (const k in powers) if (powers[k] > 0) powers[k] = Math.max(0, powers[k] - dt);
     bob = Math.sin(waveT * 1.5) * 5 * ((SCENES[scene] || SCENES.day).bob || 1);
 
     ship.x    = W / 2 + Math.sin(waveT * 0.3) * (W * 0.24);
@@ -1152,6 +1238,11 @@
       spawn("chest");
       beep(360, 0.2, "triangle", 0.045);
       chestTimer = fever ? grand(4, 7) : grand(9, 15);
+    }
+    schoolTimer -= dt;
+    if (schoolTimer <= 0) {
+      spawnSchool();
+      schoolTimer = grand(16, 30);
     }
     bossTimer -= dt;
     if (bossTimer <= 0 && !items.some(i => i.id === "boss")) {
@@ -1372,8 +1463,9 @@
     ctx.beginPath(); ctx.moveTo(ship.tipX, ship.tipY);
     ctx.quadraticCurveTo((ship.tipX + hook.x) / 2, (ship.tipY + hook.y) / 2 + 16, hook.x, hook.y);
     ctx.stroke();
-    ctx.strokeStyle = "#e2ecf2"; ctx.lineWidth = 2.6;
-    ctx.beginPath(); ctx.arc(hook.x - 5, hook.y - 2, 6, -0.4, Math.PI * 0.95); ctx.stroke();
+    const big = powers.bighook > 0;
+    ctx.strokeStyle = big ? "#9be7ff" : "#e2ecf2"; ctx.lineWidth = big ? 4 : 2.6;
+    ctx.beginPath(); ctx.arc(hook.x - 5, hook.y - 2, big ? 10 : 6, -0.4, Math.PI * 0.95); ctx.stroke();
   }
 
   // ───────────────────────── 各种海洋生物 ─────────────────────────
@@ -1686,7 +1778,57 @@
     ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.fill();
   }
 
-  const ART = { boot:artBoot, mine:artMine, fish:artFish, sword:artSword, angler:artAngler, boss:artBoss, squid:artSquid,
+  function artMagnet(it) {                                // 磁铁
+    const glow = 0.5 + Math.sin(it.t * 4) * 0.5;
+    ctx.fillStyle = `rgba(155,231,255,${0.12 + glow * 0.1})`;
+    ctx.beginPath(); ctx.arc(0, 0, 28, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#d9433a"; ctx.lineWidth = 9; ctx.lineCap = "butt";
+    ctx.beginPath(); ctx.arc(0, 2, 12, Math.PI, 0); ctx.stroke();       // 马蹄
+    ctx.fillStyle = "#dfe9f0";
+    ctx.fillRect(-17, 2, 9, 11); ctx.fillRect(8, 2, 9, 11);             // 两个银极
+  }
+
+  function artBighook(it) {                               // 大钩
+    const glow = 0.5 + Math.sin(it.t * 4) * 0.5;
+    ctx.fillStyle = `rgba(155,231,255,${0.12 + glow * 0.1})`;
+    ctx.beginPath(); ctx.arc(0, 0, 28, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#e2ecf2"; ctx.lineWidth = 5; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(2, -16); ctx.lineTo(2, 4);
+    ctx.arc(-5, 4, 7, 0, Math.PI * 0.85); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-6, -16); ctx.lineTo(10, -16); ctx.stroke();
+  }
+
+  function artWatch(it) {                                 // 怀表
+    const glow = 0.5 + Math.sin(it.t * 4) * 0.5;
+    ctx.fillStyle = `rgba(139,245,168,${0.12 + glow * 0.12})`;
+    ctx.beginPath(); ctx.arc(0, 0, 28, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#d9a521";
+    ctx.beginPath(); ctx.arc(0, 2, 15, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#f4e6c0";
+    ctx.beginPath(); ctx.arc(0, 2, 11, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#d9a521"; ctx.fillRect(-3, -17, 6, 5);            // 表冠
+    ctx.strokeStyle = "#5a3a10"; ctx.lineWidth = 2;                     // 指针
+    ctx.beginPath(); ctx.moveTo(0, 2); ctx.lineTo(0, -5);
+    ctx.moveTo(0, 2); ctx.lineTo(Math.cos(it.t) * 6, 2 + Math.sin(it.t) * 6); ctx.stroke();
+  }
+
+  function artTurbo(it) {                                 // 浮标（快收线）
+    const glow = 0.5 + Math.sin(it.t * 5) * 0.5;
+    ctx.fillStyle = `rgba(255,210,74,${0.14 + glow * 0.12})`;
+    ctx.beginPath(); ctx.arc(0, 0, 28, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#e2574c";                                          // 上半红
+    ctx.beginPath(); ctx.arc(0, 0, 14, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = "#f2f2f2";                                          // 下半白
+    ctx.beginPath(); ctx.arc(0, 0, 14, 0, Math.PI); ctx.fill();
+    ctx.fillStyle = "#ffd24a";                                          // 闪电
+    ctx.beginPath();
+    ctx.moveTo(-4, -8); ctx.lineTo(4, -1); ctx.lineTo(0, -1);
+    ctx.lineTo(5, 9); ctx.lineTo(-3, 1); ctx.lineTo(1, 1);
+    ctx.closePath(); ctx.fill();
+  }
+
+  const ART = { magnet:artMagnet, bighook:artBighook, watch:artWatch, turbo:artTurbo,
+                boot:artBoot, mine:artMine, fish:artFish, sword:artSword, angler:artAngler, boss:artBoss, squid:artSquid,
                 turtle:artTurtle, jelly:artJelly, puffer:artPuffer, crab:artCrab,
                 coin:artCoin, chest:artChest };
 
@@ -1721,9 +1863,19 @@
     ctx.globalAlpha = (fading ? 0.4 : 1) * nightAlpha(it);
     ctx.translate(it.x, it.y);
     // 水母、金币、宝箱没有朝向；其它按游动方向翻转
-    if (!["jelly", "coin", "chest", "mine", "boot"].includes(it.kind.art)) ctx.scale(it.vx >= 0 ? 1 : -1, 1);
+    if (!["jelly", "coin", "chest", "mine", "boot", "magnet", "bighook", "watch", "turbo"]
+         .includes(it.kind.art)) ctx.scale(it.vx >= 0 ? 1 : -1, 1);
     ART[it.kind.art](it);
     ctx.restore();
+    if (it.stun > 0) {                                 // 被震晕的小星星
+      ctx.fillStyle = "#f2e07a";
+      for (let i = 0; i < 3; i++) {
+        const a = it.t * 4 + i * 2.1;
+        ctx.beginPath();
+        ctx.arc(it.x + Math.cos(a) * 14, it.y - it.kind.hh - 8 + Math.sin(a) * 4, 2.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
   }
 
   /* 分数标签单独一遍画在最上层：值钱的优先，挤在一起的让位，
@@ -1839,6 +1991,17 @@
         ctx.strokeText(dtxt, 14, hy); ctx.fillStyle = "#9be7ff"; ctx.fillText(dtxt, 14, hy);
         hy += 20;
       }
+      const activePw = [];
+      if (powers.magnet  > 0) activePw.push("🧲" + Math.ceil(powers.magnet));
+      if (powers.bighook > 0) activePw.push("⚓" + Math.ceil(powers.bighook));
+      if (powers.turbo   > 0) activePw.push("⚡" + Math.ceil(powers.turbo));
+      if (activePw.length) {
+        ctx.font = "900 16px 'Segoe UI','PingFang SC',sans-serif";
+        ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,.6)";
+        const txt = activePw.join("　");
+        ctx.strokeText(txt, 14, hy); ctx.fillStyle = "#9be7ff"; ctx.fillText(txt, 14, hy);
+        hy += 22;
+      }
       if (combo >= 2) {
         ctx.font = "900 17px 'Segoe UI','PingFang SC',sans-serif";
         ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,.6)";
@@ -1912,6 +2075,12 @@
   };
   const SCENE_IDS = Object.keys(SCENES);
   let scene = "day", boltT = 0, boltNext = 5;
+
+  /* 道具：钓到就生效一段时间。磁铁/大钩/快收线纯本地表现（联机也一致，
+     因为抢鱼由服务器仲裁）；怀表要加时间，单人本地加、联机由服务器加。 */
+  const POWERS = { magnet: { dur: 6 }, bighook: { dur: 8, mult: 1.8 },
+                   turbo: { dur: 10, mult: 1.6 }, watch: { time: 5 } };
+  let powers = { magnet: 0, bighook: 0, turbo: 0 };
 
   let struggle = null;
   let shakeT = 0;                                   // 画面震动剩余时间
@@ -2046,6 +2215,8 @@
 
       case "grabbed": {
         const mine = m.by === NET.you;
+        // 爆炸对所有人可见（用服务器给的爆点，两边算出同样的结果）
+        if (m.kind === "puffer" || m.kind === "mine") applyBurst(m.kind, m.x, m.y);
         const p = NET.players.get(m.by);
         if (p) p.score = m.score;
         timeLeft = m.time;
@@ -2054,7 +2225,12 @@
           const it = hook.catches.find(c => c.netId === m.id);
           const kind = KINDS[m.kind];
           if (kind.hazard) {                       // 扣时间已经由服务器算进 m.time
-            hazardHit({ kind }, hook.x, SEA_Y + 16);
+            hazardHit({ kind, id: m.kind }, hook.x, SEA_Y + 16);
+            syncHud();
+            break;
+          }
+          if (kind.power) {                        // 道具只给钓到的人（怀表的时间服务器已加）
+            activatePower(m.kind, hook.x, SEA_Y + 16);
             syncHud();
             break;
           }

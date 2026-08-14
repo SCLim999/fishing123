@@ -48,6 +48,11 @@ export const SPEC = {
   // 危险物：不给分、清连击，水雷还扣时间
   boot:   { score:0,    w:7,  depth:[0.30,0.95], move:"coin", hazard:true },
   mine:   { score:0,    w:6,  depth:[0.20,0.90], move:"coin", hazard:true, penalty:3 },
+  // 道具：效果在客户端生效；怀表要加时间，由服务器统一加
+  magnet: { score:0,    w:4,  depth:[0.15,0.80], move:"coin", power:true },
+  bighook:{ score:0,    w:4,  depth:[0.20,0.85], move:"coin", power:true },
+  watch:  { score:0,    w:4,  depth:[0.10,0.75], move:"coin", power:true, addTime:5 },
+  turbo:  { score:0,    w:4,  depth:[0.08,0.60], move:"coin", power:true },
 };
 const SPEED = { coin:[12,28], swim:[24,64], drift:[6,14], paddle:[16,28],
                 jet:[26,46], crawl:[26,44], rise:[8,16] };
@@ -84,6 +89,7 @@ export class Room {
     this.spawnTimer = 0;
     this.chestTimer = 5;
     this.bossTimer  = 18;
+    this.schoolTimer = 14;
     this.overAt = 0;
     this.hooksDirty = false;
   }
@@ -157,12 +163,29 @@ export class Room {
         const it = this.items.get(+msg.id);
         if (!it) return;                             // 已经被别人钓走或过期了
         this.items.delete(it.id);
+        /* 爆点用钓到的人上报的位置：服务器只存出生参数，不跟踪鱼游到哪了，
+           it.x/it.y 是出生点（在画面外），拿它当爆点会炸空。 */
+        const bx = Number.isFinite(+msg.x) ? clamp(+msg.x, 0, W) : it.x;
+        const by = Number.isFinite(+msg.y) ? clamp(+msg.y, SEA_Y, FLOOR_Y) : it.y;
         const spec = SPEC[it.kind];
+        if (spec.power) {                            // 道具：不计分、不算连击
+          let add = 0;
+          if (spec.addTime) {                        // 怀表：时间由服务器加，客户端只读结果
+            add = spec.addTime;
+            this.timeLeft = Math.min(99, this.timeLeft + add);
+          }
+          this.broadcast({ t: "grabbed", id: it.id, by: id, kind: it.kind, gained: 0,
+                           score: p.score, combo: p.combo, bonus: add,
+                           x: Math.round(bx), y: Math.round(by),
+                           time: Math.ceil(this.timeLeft) });
+          break;
+        }
         if (spec.hazard) {                           // 水雷 / 破靴子
           p.combo = 0;
           if (spec.penalty) this.timeLeft = Math.max(0.1, this.timeLeft - spec.penalty);
           this.broadcast({ t: "grabbed", id: it.id, by: id, kind: it.kind, gained: 0,
                            score: p.score, combo: 0, bonus: 0,
+                           x: Math.round(bx), y: Math.round(by),
                            time: Math.ceil(this.timeLeft) });
           break;
         }
@@ -177,6 +200,7 @@ export class Room {
         }
         this.broadcast({ t: "grabbed", id: it.id, by: id, kind: it.kind, gained,
                          score: p.score, combo: p.combo, bonus: add,
+                         x: Math.round(bx), y: Math.round(by),
                          time: Math.ceil(this.timeLeft) });
         break;
       }
@@ -207,6 +231,7 @@ export class Room {
     this.spawnTimer = 0;
     this.chestTimer = rand(4, 7);
     this.bossTimer  = rand(15, 25);
+    this.schoolTimer = rand(10, 18);
     this.items.clear();
     this.pending = [];
   }
@@ -278,6 +303,22 @@ export class Room {
     if (this.chestTimer <= 0) {
       this.spawnOne(false, "chest");
       this.chestTimer = this.fever ? rand(4, 7) : rand(9, 15);
+    }
+    this.schoolTimer -= dt;
+    if (this.schoolTimer <= 0) {                      // 鱼阵：一队同深同速的小鱼
+      const kind = Math.random() < 0.5 ? "small" : "clown";
+      const dir  = Math.random() < 0.5 ? 1 : -1;
+      const n    = Math.round(rand(9, 14));
+      const y    = TOP + rand(0.15, 0.55) * SPAN;
+      const vx   = rand(38, 58) * dir;
+      const gap  = rand(38, 52);
+      for (let i = 0; i < n && this.items.size < MAX_ITEMS + 14; i++) {
+        const it = { id: this.nextId++, kind, x: (dir === 1 ? -40 : W + 40) - dir * i * gap,
+                     y: y + Math.sin(i * 0.9) * 12, vx, life: (W + 240) / Math.abs(vx) + 1 };
+        this.items.set(it.id, it);
+        (this.pending = this.pending || []).push(this.wire(it));
+      }
+      this.schoolTimer = rand(16, 30);
     }
     this.bossTimer -= dt;
     if (this.bossTimer <= 0) {
