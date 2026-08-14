@@ -869,6 +869,7 @@
     score = 0; timeLeft = roundTime; combo = 0; caught = {}; earned = {}; newSeen = [];
     items = []; pops = []; sparks = [];
     hook = { state:"idle", x:W/2, y:SEA_Y, catches:[], pull:0 };
+    struggle = null;                 // 上一局时间到时可能正拉着大货，没清的话这一局点屏全被 QTE 吃掉
     // 每日挑战：整局世界都从今天的日期播种；平时用真随机
     gRnd = daily ? mulberry32(seedFromString("treasureCove-" + todayKey())) : Math.random;
     spawnTimer = 0; chestTimer = grand(4, 7); bossTimer = grand(15, 25);
@@ -928,6 +929,7 @@
 
   function endGame() {
     state = "over";
+    struggle = null;
     el.overPlayers.style.display = "none";
     el.overRank.style.display = "";
     for (const m of missions) {                   // 「整局不碰水雷」要等局末才知道
@@ -2380,6 +2382,7 @@
     resizeCanvas();                                 // 联机固定标准宽度
     items = []; pops = []; sparks = [];
     hook = { state:"idle", x:W/2, y:SEA_Y, catches:[], pull:0 };
+    struggle = null;
     combo = 0; score = 0; caught = {}; earned = {}; newSeen = [];
     el.menu.classList.add("hidden");
     el.over.classList.add("hidden");
@@ -2529,6 +2532,7 @@
 
       case "over":
         state = "over";
+        struggle = null;
         NET.players = new Map((m.players || []).map(p => [p.id, p]));
         showOnlineResults(m.players || []);
         break;
