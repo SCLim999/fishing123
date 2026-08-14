@@ -162,6 +162,30 @@
   .mp-note{font-size:.74rem;color:#a8c8da;line-height:1.5}
   .mp-note.err{color:#ffb1a6}
   .mp-note.ok{color:#8bf5a8}
+  /* 锁屏：盖住整台机台，压在所有其它层之上 */
+  #lock{
+    position:absolute;inset:0;z-index:80;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+    background:linear-gradient(180deg,rgba(3,20,36,.94),rgba(2,10,20,.97));
+    backdrop-filter:blur(4px);padding:20px;text-align:center;
+  }
+  #lock.hidden{display:none}
+  #lock .lk-ico{font-size:3rem;line-height:1;filter:drop-shadow(0 3px 6px rgba(0,0,0,.5))}
+  #lock .lk-title{font-size:1.15rem;font-weight:900;color:var(--gold)}
+  #lock .lk-sub{font-size:.82rem;color:#a8c8da;max-width:22em;line-height:1.6}
+  #lock .lk-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+  #lock input{
+    background:var(--parch);border:2px solid #8b6b2a;border-radius:8px;
+    padding:9px 12px;font-size:.95rem;color:#3b2a10;width:min(15em,60vw);
+    text-align:center;letter-spacing:.06em;
+  }
+  #lock .lk-bad{color:#ffb1a6;font-size:.82rem;min-height:1.2em}
+  #lock.shake{animation:lkShake .32s}
+  @keyframes lkShake{
+    0%,100%{transform:translateX(0)}
+    20%{transform:translateX(-9px)} 40%{transform:translateX(8px)}
+    60%{transform:translateX(-5px)} 80%{transform:translateX(4px)}
+  }
   #card-view{
     position:fixed;inset:0;z-index:60;background:rgba(2,10,18,.88);cursor:pointer;
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;
@@ -213,10 +237,23 @@
     <button class="icon-btn" id="btn-music" title="背景音乐开关">🎵</button>
     <button class="icon-btn" id="btn-sound" title="音效开关">🔊</button>
     <button class="icon-btn" id="btn-full" title="全屏（F）">⛶</button>
+    <button class="icon-btn" id="btn-lock" title="锁屏">🔒</button>
   </div>
 
   <div class="stage" id="stage">
     <canvas id="game" width="600" height="980"></canvas>
+
+    <div id="lock" class="hidden">
+      <div class="lk-ico">🔒</div>
+      <div class="lk-title" data-i18n="lock_title">已锁屏</div>
+      <div class="lk-sub" data-i18n="lock_sub">输入密码继续钓鱼</div>
+      <div class="lk-row">
+        <input id="lock-pw" type="password" data-ph="lock_ph" autocomplete="off"
+               autocapitalize="off" spellcheck="false" inputmode="text">
+        <button class="mp-btn" id="lock-go" data-i18n="lock_btn">解锁</button>
+      </div>
+      <div class="lk-bad" id="lock-bad"></div>
+    </div>
 
     <div class="overlay" id="overlay-menu">
       <div class="banner" data-i18n="banner_start">点一下就开钓！</div>
@@ -341,6 +378,8 @@
       dex_label:"图鉴", dex_hint:"钓到过的会亮起来",
       seg_dur:"局时", btn_start:"单人开钓", btn_online:"联机开钓",
       ph_room:"房间码　如 ABCD", ph_name:"你的昵称", ph_url:"联机服务器 wss://…",
+      lock_title:"已锁屏", lock_sub:"输入密码继续钓鱼", lock_ph:"密码", lock_btn:"解锁",
+      lock_bad:"密码不对，再试一次", lock_ok:"解锁了，开钓吧",
       spec_label:"观战模式（只看不钓）",
       mp_note:"和朋友填同一个房间码，就在同一片海里抢鱼 —— 鱼被谁先钩到就归谁。需要先部署 worker/（见 README）；禁止外连的沙箱页面里联机会被拦掉。",
       banner_got:"YOU GOT", btn_share:"复制 / 分享成绩", btn_again:"再钓一次",
@@ -405,6 +444,8 @@
       dex_label:"Bestiary", dex_hint:"lights up what you have caught",
       seg_dur:"Round", btn_start:"Play solo", btn_online:"Play online",
       ph_room:"Room code, e.g. ABCD", ph_name:"Your name", ph_url:"Server wss://…",
+      lock_title:"Locked", lock_sub:"Enter the password to keep fishing", lock_ph:"Password",
+      lock_btn:"Unlock", lock_bad:"Wrong password — try again", lock_ok:"Unlocked. Go fish.",
       spec_label:"Spectate (watch only)",
       mp_note:"Enter the same room code as your friends and you fish the same sea — a fish goes to whoever hooks it first. Needs the worker/ server deployed (see README); sandboxes that block outbound connections cannot go online.",
       banner_got:"YOU GOT", btn_share:"Copy / share result", btn_again:"Fish again",
@@ -626,6 +667,10 @@
     sound: document.getElementById("btn-sound"),
     music: document.getElementById("btn-music"),
     full:  document.getElementById("btn-full"),
+    lockBtn: document.getElementById("btn-lock"),
+    lock:  document.getElementById("lock"),
+    lockPw: document.getElementById("lock-pw"),
+    lockBad: document.getElementById("lock-bad"),
     segDur: document.getElementById("seg-dur"),
     menuRank: document.getElementById("menu-rank"),
     overRank: document.getElementById("over-rank"),
@@ -2741,6 +2786,7 @@
   }
 
   canvas.addEventListener("pointerdown", e => {
+    if (locked) return;
     e.preventDefault();
     if (state === "playing" && struggle) { tapStruggle(); return; }   // 正在拉扯
     state === "playing" ? cast(canvasX(e.clientX)) : requestStart();
@@ -3012,6 +3058,7 @@
     el.sound.textContent = soundOn ? "🔊" : "🔇";
   });
   window.addEventListener("keydown", e => {
+    if (locked) return;                              // 锁屏时快捷键全部不响应
     if (e.key === "f" || e.key === "F") {            // F 切全屏
       if (document.activeElement && document.activeElement.tagName === "INPUT") return;
       e.preventDefault();
@@ -3029,12 +3076,72 @@
     state === "playing" ? cast(hook.x + rand(-120, 120)) : requestStart();
   });
 
+  /* ───────────────────────── 锁屏 ─────────────────────────
+     一道简单的门，不是安全措施 —— 密码就写在这个文件里，看网页源码就能拿到。
+     用途是「不知道密码的人打不开来玩」，别拿它挡真想进来的人。
+     解锁记在 sessionStorage：这一次浏览器会话里不用反复输，整个浏览器关掉就重新锁上。 */
+  const LOCK_PW  = "iLoveFish123";
+  const LOCK_KEY = "treasureCove.unlocked.v1";
+  let locked = false;
+
+  function lockScreen() {
+    locked = true;
+    try { sessionStorage.removeItem(LOCK_KEY); } catch (_) {}
+    // 联机时锁屏就退出房间：本地世界冻住而服务器还在跑，留着只会解锁后满屏错位
+    if (online && NET.ws) { try { NET.ws.close(); } catch (_) {} }
+    el.lockBad.textContent = "";
+    el.lockPw.value = "";
+    el.lock.classList.remove("hidden");
+    el.lockBtn.style.opacity = 1;
+    bgmStop();
+    try { el.lockPw.focus(); } catch (_) {}
+  }
+
+  function tryUnlock() {
+    if (el.lockPw.value === LOCK_PW) {
+      locked = false;
+      try { sessionStorage.setItem(LOCK_KEY, "1"); } catch (_) {}
+      el.lock.classList.add("hidden");
+      el.lockPw.value = "";
+      el.lockBad.textContent = "";
+      el.lockBtn.style.opacity = 0.55;
+      last = performance.now();                    // 别把锁着的这段时间算成一帧
+      if (BGM.on) bgmStart();
+      beep(880, 0.12, "triangle", 0.05);
+      setTimeout(() => beep(1170, 0.14, "triangle", 0.05), 90);
+      return true;
+    }
+    el.lockBad.textContent = t("lock_bad");
+    el.lockPw.value = "";
+    el.lock.classList.remove("shake");
+    void el.lock.offsetWidth;                      // 重置动画，连错两次也能再抖一下
+    el.lock.classList.add("shake");
+    beep(160, 0.16, "sawtooth", 0.05);
+    try { el.lockPw.focus(); } catch (_) {}
+    return false;
+  }
+
+  el.lockBtn.addEventListener("click", e => { e.stopPropagation(); lockScreen(); });
+  document.getElementById("lock-go").addEventListener("click", e => { e.stopPropagation(); tryUnlock(); });
+  el.lockPw.addEventListener("keydown", e => {
+    e.stopPropagation();                           // 别让空格/回车漏到放钩那边去
+    if (e.key === "Enter") tryUnlock();
+  });
+  el.lock.addEventListener("click", e => e.stopPropagation());
+
+  function initLock() {
+    let was = null;
+    try { was = sessionStorage.getItem(LOCK_KEY); } catch (_) {}
+    if (was === "1") { locked = false; el.lock.classList.add("hidden"); el.lockBtn.style.opacity = 0.55; }
+    else lockScreen();
+  }
+
   // ───────────────────────── 主循环 ─────────────────────────
   let last = performance.now(), lastDt = 0.016;
   function loop(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now; lastDt = dt;
-    update(dt);
+    if (!locked) update(dt);                       // 锁屏时世界冻住，倒计时也不走
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);        // 逻辑坐标 → 物理像素
     if (shakeT > 0) {                              // 水雷炸一下
       shakeT = Math.max(0, shakeT - dt);
@@ -3050,6 +3157,7 @@
   refreshDaily();
   renderDurSeg();
   resetGame();                       // 菜单背景也有鱼在游
+  initLock();                        // 放最后：锁屏要用到 el / t() / bgm
   requestAnimationFrame(loop);
 })();
 </script>
