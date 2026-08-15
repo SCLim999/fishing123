@@ -471,7 +471,8 @@
       map_label:"海域",
       yard_btn:"🛠 造船厂", yard_coins:"金币", yard_rate:"（每 12 分换 1 枚）",
       yard_lv:"{lv} / {max} 级", yard_buy:"{n} 金", yard_max:"满级",
-      yard_note:"升级只在单人普通局生效 —— 联机和每日挑战都跑白板数值，那样才公平。",
+      yard_note:"鱼线 / 鱼钩 / 绞盘 联机照常生效。船体和运气改的是整个房间共用的世界（倒计时、出什么鱼），服务器统一发，没法只给一个人加 —— 所以联机里那两条不算。每日挑战全部跑白板，那样才有得比。",
+      yard_solo:"（仅单人）",
       coins_got:"这一局赚到 {n} 金　·　现有 {total} 金",
       yard_done:"{name} 升到 {lv} 级！",
       tab_sum:"战果", tab_fish:"钓到的鱼",
@@ -548,7 +549,8 @@
       map_label:"Waters",
       yard_btn:"🛠 Shipyard", yard_coins:"Coins", yard_rate:"(1 per 12 points)",
       yard_lv:"Lv {lv} / {max}", yard_buy:"{n} coins", yard_max:"Maxed",
-      yard_note:"Upgrades apply to normal solo rounds only — online and the daily challenge always run a stock boat, so the comparison stays fair.",
+      yard_note:"Line, hook and winch work online too. Hull and luck change the room's shared world — the clock and what spawns — which the server sends to everyone, so they can't apply to one player alone and are off online. The daily challenge always runs a stock boat so the scores stay comparable.",
+      yard_solo:"(solo only)",
       coins_got:"Earned {n} coins this round　·　{total} in the hold",
       yard_done:"{name} is now level {lv}!",
       tab_sum:"Results", tab_fish:"Your catch",
@@ -899,8 +901,12 @@
   /* 造船厂：跨局累积的养成。每局结算按分数折算成金币，金币买升级，
      升级直接改真实数值（收线速度、命中范围、串钩上限、局时、大货权重）。
 
-     只在**单人普通局**生效 —— 联机开了就是花钱变强，对别人不公平；
-     每日挑战是全球同一片海比分数，装备不同就没得比。这两种都跑「白板」数值。 */
+     哪些能在联机里生效，是按「这条效果改的是我自己，还是改整个房间」分的：
+       · 鱼线 / 鱼钩 / 绞盘 —— 只改我这根线怎么动，别人的世界一点不受影响 → 联机照常生效
+       · 船体（局时）/ 运气（出鱼权重）—— 那是**整个房间共用的世界**，
+         服务器统一发倒计时和鱼，没法只给一个人加时间、只给一个人多出鲸鱼。
+         标 room:true，联机里自动不算（单人照常）。
+     每日挑战全部不算 —— 全球同一片海比分数，装备不同就没得比了。 */
   const BOAT_KEY = "treasureCove.boat.v1";
   const UPGRADES = [
     { id:"line",  zh:"鱼线",   en:"Line",    icon:"🧵", max:5, cost:l => 120 + l * 110,
@@ -909,9 +915,9 @@
       zhE:"命中范围 +9%/级",     enE:"+9% hook reach per level" },
     { id:"winch", zh:"绞盘",   en:"Winch",   icon:"⚙️", max:3, cost:l => 400 + l * 350,
       zhE:"一钩多串 1 个/级",    enE:"+1 to the chain limit per level" },
-    { id:"hull",  zh:"船体",   en:"Hull",    icon:"⛵", max:4, cost:l => 300 + l * 260,
+    { id:"hull",  zh:"船体",   en:"Hull",    icon:"⛵", max:4, cost:l => 300 + l * 260, room:true,
       zhE:"每局 +3 秒/级",       enE:"+3s of round time per level" },
-    { id:"luck",  zh:"运气",   en:"Luck",    icon:"🍀", max:4, cost:l => 350 + l * 300,
+    { id:"luck",  zh:"运气",   en:"Luck",    icon:"🍀", max:4, cost:l => 350 + l * 300, room:true,
       zhE:"大货出现率 +14%/级",  enE:"+14% big-catch spawn rate per level" },
   ];
   const boat = { coins: 0 };
@@ -924,10 +930,12 @@
   function clampInt(v, lo, hi) { v = Math.round(+v || 0); return v < lo ? lo : v > hi ? hi : v; }
   const saveBoat = () => { try { localStorage.setItem(BOAT_KEY, JSON.stringify(boat)); } catch (_) {} };
 
-  /* 升级只在单人普通局生效 —— 一个开关管住所有效果，
-     省得每处都写一遍「联机和每日不算」然后漏掉一处。 */
-  const boatOn = () => !online && !daily;
-  const lv = id => boatOn() ? boat[id] : 0;
+  /* 一个函数管住「这条升级现在算不算」，省得每处效果各写一遍判断然后漏掉一处。
+     每日挑战全不算；联机时只有改「整个房间」的那两条不算。 */
+  const ROOM_WIDE = new Set(UPGRADES.filter(u => u.room).map(u => u.id));
+  const upgOn = id => !daily && !(online && ROOM_WIDE.has(id));
+  const lv = id => upgOn(id) ? boat[id] : 0;
+  const coinsOn = () => !daily;                    // 联机也发金币；只有每日挑战不发
 
   const COIN_PER = 12;                             // 多少分换 1 枚金币
   const coinsFor = sc => Math.max(0, Math.floor(sc / COIN_PER));
@@ -1296,8 +1304,7 @@
     }
     if (daily) { saveDaily(score); refreshDaily(); }
     lastGotA = checkAchievements();
-    // 只有单人普通局才赚金币：联机和每日都跑白板，也不该产出养成资源
-    lastCoins = boatOn() ? coinsFor(score) : 0;
+    lastCoins = coinsOn() ? coinsFor(score) : 0;
     if (lastCoins > 0) { boat.coins += lastCoins; saveBoat(); }
     paintSoloResults(entry);
     renderDex();
@@ -3328,8 +3335,14 @@
     el.overTable.innerHTML = Object.keys(KINDS).filter(k => caught[k])
       .map(k => `<span>${kindName(k)} ×${caught[k]}</span><span>${t("pts", { n: earned[k] })}</span>`).join("")
       || `<span>${t("nothing_mp")}</span><span>${t("pts", { n: 0 })}</span>`;
-    if (!repaint) lastGotA = checkAchievements({ mpRank: rank, mpPlayers: list.length });
+    if (!repaint) {
+      lastGotA = checkAchievements({ mpRank: rank, mpPlayers: list.length });
+      lastCoins = coinsOn() ? coinsFor(score) : 0;      // 联机局也发金币
+      if (lastCoins > 0) { boat.coins += lastCoins; saveBoat(); }
+    }
     paintAchvLine();
+    el.overCoins.textContent = lastCoins > 0
+      ? t("coins_got", { n: lastCoins, total: boat.coins }) : "";
     renderFishPane();
     el.overMiss.innerHTML = "";                   // 联机局不跑任务
     el.overDex.textContent = newSeen.length
@@ -3757,7 +3770,7 @@
       name.textContent = `${lang === "en" ? u.en : u.zh}　${t("yard_lv", { lv: l, max: u.max })}`;
       const eff = document.createElement("div");
       eff.className = "u-e";
-      eff.textContent = lang === "en" ? u.enE : u.zhE;
+      eff.textContent = (lang === "en" ? u.enE : u.zhE) + (u.room ? "　" + t("yard_solo") : "");
       const dots = document.createElement("div");
       dots.className = "u-dots";
       for (let i = 0; i < u.max; i++) {
