@@ -429,6 +429,8 @@
       seg_dur:"局时", btn_start:"单人开钓", btn_online:"联机开钓",
       ph_room:"房间码　如 ABCD", ph_name:"你的昵称", ph_url:"联机服务器 wss://…",
       pop_eaten:"🦈 {name} 被吃了",
+      map_here:"📍 {name}",
+      map_label:"海域",
       tab_sum:"战果", tab_fish:"钓到的鱼",
       fish_none:"这一局什么都没钓上来 —— 下一竿挑鱼多的那一竖排。",
       fish_count:"×{n}",
@@ -499,6 +501,8 @@
       seg_dur:"Round", btn_start:"Play solo", btn_online:"Play online",
       ph_room:"Room code, e.g. ABCD", ph_name:"Your name", ph_url:"Server wss://…",
       pop_eaten:"🦈 ate the {name}",
+      map_here:"📍 {name}",
+      map_label:"Waters",
       tab_sum:"Results", tab_fish:"Your catch",
       fish_none:"Nothing came up this round — aim for a column with more fish.",
       fish_count:"×{n}",
@@ -602,6 +606,11 @@
     jelly:  { name:"水母",     en:"Jellyfish",     score:60,   pull:275, depth:[0.06,0.58], hw:24, hh:26, lo:34, w:9,  art:"jelly", move:"drift" },
     medium: { name:"黄金鱼",   en:"Golden Fish",   score:80,   pull:240, depth:[0.25,0.66], hw:34, hh:21, lo:36, w:11, art:"fish",  move:"swim", len:58, color:"#ffd166", fin:"#d19320" },
     puffer: { name:"河豚",     en:"Pufferfish",     score:110,  pull:230, depth:[0.25,0.62], hw:28, hh:28, lo:40, w:8,  art:"puffer",move:"swim" },
+    starfish:{name:"海星",     en:"Starfish",   score:40,   pull:250, depth:[1,1],       hw:20, hh:18, lo:26, w:6,  art:"starfish", move:"crawl" },
+    seahorse:{name:"海马",     en:"Seahorse",   score:90,   pull:265, depth:[0.12,0.55], hw:16, hh:24, lo:32, w:7,  art:"seahorse", move:"drift" },
+    lobster:{ name:"龙虾",     en:"Lobster",    score:170,  pull:195, depth:[1,1],       hw:31, hh:19, lo:30, w:5,  art:"lobster",  move:"crawl" },
+    manta:  { name:"蝠鲼",     en:"Manta Ray",  score:300,  pull:170, depth:[0.40,0.88], hw:58, hh:20, lo:38, w:4,  art:"manta",    move:"paddle" },
+    whale:  { name:"鲸鱼",     en:"Whale",      score:900,  pull:70,  depth:[0.30,0.72], hw:108,hh:44, lo:64, w:2,  art:"whale",    move:"swim" },
     crab:   { name:"螃蟹",     en:"Crab",     score:130,  pull:210, depth:[1,1],       hw:26, hh:18, lo:30, w:5,  art:"crab",  move:"crawl" },
     big:    { name:"大红鱼",   en:"Red Fish",   score:150,  pull:175, depth:[0.50,0.90], hw:48, hh:29, lo:48, w:8,  art:"fish",  move:"swim", len:86, color:"#ff7b6b", fin:"#c9463a" },
     turtle: { name:"海龟",     en:"Sea Turtle",     score:200,  pull:150, depth:[0.20,0.62], hw:38, hh:26, lo:36, w:5,  art:"turtle",move:"paddle"},
@@ -631,7 +640,8 @@
   };
   // 普通抽取池（宝箱和巨兽有自己的计时器，权重设 0）
   const POOL = Object.keys(KINDS).filter(k => KINDS[k].w > 0);
-  const POOL_TOTAL = POOL.reduce((s, k) => s + KINDS[k].w, 0);
+  // 权重 = 基础权重 × 当前地图的倍率（表里没写就是 1）
+  const weightOf = k => KINDS[k].w * (MAPS[gmap].mul[k] != null ? MAPS[gmap].mul[k] : 1);
   const maxItems = () => Math.round(26 * widthScale());
 
   // ───────────────────────── 状态 ─────────────────────────
@@ -794,6 +804,16 @@
                en:"Sharks have no bones at all — the whole skeleton is cartilage. Teeth keep conveyor-belting forward; some species go through tens of thousands in a lifetime." },
     boss:    { zh:"传说里的海怪多半来自真实的大王乌贼 —— 有记录的个体连触腕长约 13 米，而人类第一次拍到活体是 2004 年。",
                en:"Sea-monster legends mostly trace back to the giant squid — recorded at about 13 m including tentacles, and first photographed alive in 2004." },
+    starfish:{ zh:"海星没有大脑也没有血，靠海水在体内循环。断掉的腕能重新长出来，有些种类甚至能从一条腕长回整只。",
+               en:"Starfish have no brain and no blood — seawater circulates through them instead. Lost arms regrow, and in some species a single arm can rebuild the whole animal." },
+    seahorse:{ zh:"海马是**雄性怀孕**：雌海马把卵产进公海马腹部的育儿袋，由他孵化、由他生出来。",
+               en:"In seahorses the male gets pregnant: the female deposits eggs into his brood pouch, and he carries and delivers them." },
+    lobster: { zh:"龙虾活着的时候多是深褐或蓝绿色 —— 那身鲜红只有煮熟才会出现，因为高温把包裹红色素的蛋白拆开了。",
+               en:"Live lobsters are mostly brown or blue-green. The bright red only appears when cooked — heat unfolds the protein that was hiding the red pigment." },
+    manta:   { zh:"蝠鲼翼展能超过 7 米，却只吃浮游生物。它是极少数能认出镜子里是自己的鱼类之一。",
+               en:"Manta rays span over 7 m yet eat only plankton. They are among the very few fish that appear to recognise themselves in a mirror." },
+    whale:   { zh:"蓝鲸是地球上出现过的最大动物，比任何恐龙都大；它的叫声能传到几百公里外的同类耳朵里。",
+               en:"The blue whale is the largest animal that has ever lived — bigger than any dinosaur — and its calls carry to others hundreds of kilometres away." },
     crab:    { zh:"螃蟹横着走是因为腿关节只能前后弯。它们用鳃呼吸，只要鳃还湿着就能在岸上待一阵。",
                en:"Crabs walk sideways because their leg joints only bend one way. They breathe through gills, and can stay ashore while those gills stay wet." },
     boot:    { zh:"钓上破靴子是钓鱼游戏几十年的老梗了。真实的海底垃圾里，橡胶和塑料确实是常客。",
@@ -1005,11 +1025,13 @@
     const dir = gRnd() < 0.5 ? 1 : -1;
     const sp  = { coin:[12,28], swim:[24,64], drift:[6,14], paddle:[16,28],
                   jet:[26,46], crawl:[26,44], rise:[8,16], hunt:[32,52] }[k.move] || [20, 50];
+    // 鲸鱼是庞然大物，慢慢巡游才有分量；龙虾比螃蟹稳一点
+    const spd = id === "whale" ? [14, 22] : id === "lobster" ? [18, 30] : sp;
     const it = {
       id, kind:k, dir,
       x: dir === 1 ? -k.hw * 2 : W + k.hw * 2,
       y: k.move === "crawl" ? FLOOR_Y - 14 : TOP + grand(k.depth[0], k.depth[1]) * SPAN,
-      vx: grand(sp[0], sp[1]) * dir,
+      vx: grand(spd[0], spd[1]) * dir,
       wob: Math.random() * Math.PI * 2,
       t: 0,
       // 会游出画面的自然离场；漂着不动的给个寿命，免得海里越堆越满
@@ -1053,8 +1075,10 @@
   }
 
   function spawnRandom() {
-    let r = gRnd() * POOL_TOTAL, id = POOL[0];
-    for (const k of POOL) { if ((r -= KINDS[k].w) <= 0) { id = k; break; } }
+    const total = POOL.reduce((a, k) => a + weightOf(k), 0);
+    let r = gRnd() * total, id = null;
+    for (const k of POOL) { if ((r -= weightOf(k)) <= 0) { id = k; break; } }
+    if (!id) id = POOL.find(k => weightOf(k) > 0) || POOL[0];   // 极端情况兜底
     spawn(id);
   }
 
@@ -1071,6 +1095,18 @@
     scene = SCENES[id] ? id : "day";
     boltT = 0; boltNext = rand(3, 8);
     buildBackground();                             // 配色变了，背景要重烘
+  }
+
+  function setMap(id) {
+    gmap = MAPS[id] ? id : "open";
+    buildBackground();                             // 海水配色和海底装饰都跟着换
+  }
+
+  function pickMap() {
+    const total = MAP_IDS.reduce((a, k) => a + MAPS[k].w, 0);
+    let r = grand(0, total);
+    for (const k of MAP_IDS) { if ((r -= MAPS[k].w) <= 0) return k; }
+    return "open";
   }
 
   function pickScene() {
@@ -1096,7 +1132,7 @@
     roundStat = { maxChain:0, maxCombo:0, powersUsed:0, score:0, mineHits:0, scene, caught:{},
                   mpRank:0, mpPlayers:0, sharkMeals:0 };
     rollMissions();
-    if (!online) { setScene(pickScene()); announceScene(); }
+    if (!online) { gmap = pickMap(); setScene(pickScene()); announceScene(); }
     el.stage.classList.remove("fever");
     for (let i = 0, n = Math.round(14 * widthScale()); i < n; i++) {   // 开局就有一片鱼群
       spawnRandom();
@@ -1107,7 +1143,8 @@
   }
 
   function announceScene() {
-    if (scene !== "day") pop(W / 2, SEA_Y + 120, t("sc_" + scene), "#cfe6f2", 20);
+    pop(W / 2, SEA_Y + 96, t("map_here", { name: mapName(gmap) }), "#ffd24a", 21);
+    if (scene !== "day") pop(W / 2, SEA_Y + 130, t("sc_" + scene), "#cfe6f2", 20);
   }
 
   function startGame() {
@@ -1282,7 +1319,7 @@
     return v >= 400 ? 3 : v >= 150 ? 2 : v >= 60 ? 1 : 0; };
 
   // 鲨鱼吃什么：只吃比自己小得多的游鱼，宝箱 / 道具 / 危险物 / 巨兽都不碰
-  const PREY = { small:1, clown:1, medium:1, big:1, jelly:1, squid:1 };
+  const PREY = { small:1, clown:1, medium:1, big:1, jelly:1, squid:1, seahorse:1 };
 
   function cast(x) {
     if (state !== "playing" || spectating) return;   // 观众没有钩子
@@ -1764,8 +1801,12 @@
     g.moveTo(W - 150, SEA_Y); g.quadraticCurveTo(W - 90, SEA_Y - 78, W - 20, SEA_Y);
     g.closePath(); g.fill();
 
+    /* 海水颜色：天色和地图各有一套，取两者的中点 ——
+       这样「深海沟的黄昏」既有黄昏的暖，也保住深海沟的沉。 */
+    const MP = MAPS[gmap] || MAPS.open;
+    const seaCols = MP.sea ? SC.sea.map((c, i) => mixHex(c, MP.sea[i], 0.5)) : SC.sea;
     const sea = g.createLinearGradient(0, SEA_Y, 0, H);
-    sea.addColorStop(0, SC.sea[0]); sea.addColorStop(0.4, SC.sea[1]); sea.addColorStop(1, SC.sea[2]);
+    sea.addColorStop(0, seaCols[0]); sea.addColorStop(0.4, seaCols[1]); sea.addColorStop(1, seaCols[2]);
     g.fillStyle = sea; g.fillRect(0, SEA_Y, W, H - SEA_Y);
     if (SC.dark) {                                  // 夜色直接烘进背景，别每帧铺一遍
       g.fillStyle = `rgba(2,10,20,${SC.dark})`;
@@ -1783,10 +1824,81 @@
     }
     g.restore();
 
-    g.fillStyle = "#0a2b3f";                                   // 海底
-    g.beginPath(); g.moveTo(0, H);
+    g.fillStyle = MP.floor === "ice" ? "#123a52" : MP.floor === "wreck" ? "#0d2636" : "#0a2b3f";
+    g.beginPath(); g.moveTo(0, H);                             // 海底
     for (let x = 0; x <= W; x += 30) g.lineTo(x, FLOOR_Y + Math.sin(x * 0.02) * 7);
     g.lineTo(W, H); g.closePath(); g.fill();
+    paintFloor(g, MP.floor);
+  }
+
+  /* 海底装饰：一眼认出这是哪片海。全部烘进背景，每帧只贴一次，不花运行时。
+     位置用固定的算式而不是随机 —— 换一次地图重烘一次，形状不能每次都跳。 */
+  function paintFloor(g, kind) {
+    const n = Math.max(4, Math.round(W / 150));
+    const fy = x => FLOOR_Y + Math.sin(x * 0.02) * 7;
+    if (kind === "coral") {
+      for (let i = 0; i < n * 2; i++) {
+        const x = ((i * 173) % (W - 40)) + 20, y = fy(x);
+        const h = 26 + (i % 5) * 11;
+        g.fillStyle = ["#ff8f6b", "#ffb35e", "#c98bd8", "#6fd3b6", "#f2778f"][i % 5];
+        g.globalAlpha = 0.55;
+        for (let b = 0; b < 3; b++) {                          // 一丛珊瑚：三根指状分枝
+          g.beginPath();
+          g.moveTo(x, y);
+          g.quadraticCurveTo(x + (b - 1) * 9, y - h * 0.6, x + (b - 1) * 15, y - h);
+          g.lineWidth = 5; g.strokeStyle = g.fillStyle; g.stroke();
+          g.beginPath(); g.arc(x + (b - 1) * 15, y - h, 4, 0, Math.PI * 2); g.fill();
+        }
+        g.globalAlpha = 1;
+      }
+    } else if (kind === "rock") {
+      g.fillStyle = "#08202f";
+      for (let i = 0; i < n * 1.5; i++) {                      // 海底石笋
+        const x = ((i * 211) % (W - 30)) + 15, y = fy(x), h = 34 + (i % 4) * 26;
+        g.beginPath();
+        g.moveTo(x - 13, y); g.lineTo(x + (i % 3 - 1) * 6, y - h); g.lineTo(x + 13, y);
+        g.closePath(); g.fill();
+      }
+    } else if (kind === "wreck") {
+      for (let i = 0, m = Math.max(1, Math.round(W / 700)); i < m; i++) {
+        const x = 90 + i * 700, y = fy(x);
+        g.save();
+        g.translate(x, y); g.rotate(-0.18);
+        g.fillStyle = "#43301c";                               // 破船身
+        g.beginPath();
+        g.moveTo(-95, 0); g.quadraticCurveTo(-70, 26, 60, 20);
+        g.quadraticCurveTo(95, 12, 100, -6); g.lineTo(-88, -14);
+        g.closePath(); g.fill();
+        g.fillStyle = "#2f2113";
+        for (let r = 0; r < 3; r++) g.fillRect(-60 + r * 44, -6, 16, 12);   // 舷窗
+        g.strokeStyle = "#43301c"; g.lineWidth = 7;            // 断掉的桅杆
+        g.beginPath(); g.moveTo(10, -12); g.lineTo(46, -78); g.stroke();
+        g.restore();
+      }
+    } else if (kind === "ice") {
+      g.fillStyle = "rgba(214,240,252,.5)";
+      for (let i = 0; i < n; i++) {                            // 水面浮冰
+        const x = ((i * 263) % (W - 80)) + 40;
+        g.beginPath();
+        g.moveTo(x - 46, SEA_Y); g.lineTo(x - 28, SEA_Y - 13);
+        g.lineTo(x + 6, SEA_Y - 17); g.lineTo(x + 40, SEA_Y);
+        g.closePath(); g.fill();
+      }
+      g.fillStyle = "rgba(150,205,230,.25)";
+      for (let i = 0; i < n; i++) {                            // 海底冰棱
+        const x = ((i * 157) % (W - 40)) + 20, y = fy(x), h = 22 + (i % 4) * 15;
+        g.beginPath();
+        g.moveTo(x - 12, y); g.lineTo(x, y - h); g.lineTo(x + 12, y);
+        g.closePath(); g.fill();
+      }
+    }
+  }
+
+  // 两个 #rrggbb 按比例混一下
+  function mixHex(a, b, f) {
+    const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+    const mix = sh => Math.round((((pa >> sh) & 255) * (1 - f) + ((pb >> sh) & 255) * f));
+    return "#" + [16, 8, 0].map(sh => mix(sh).toString(16).padStart(2, "0")).join("");
   }
 
   function buildBackground() {
@@ -1866,13 +1978,18 @@
     }
     ctx.stroke();
 
-    ctx.strokeStyle = "rgba(56,192,150,.5)"; ctx.lineWidth = 6;      // 海草摆动
-    for (let i = 0, n = Math.max(7, Math.round(W / 92)); i < n; i++) {
-      const x = 30 + i * 92, h = 34 + (i % 3) * 26;
-      ctx.beginPath(); ctx.moveTo(x, FLOOR_Y);
-      ctx.quadraticCurveTo(x + Math.sin(waveT * 1.3 + i) * 15, FLOOR_Y - h * 0.6,
-                           x + Math.sin(waveT * 1.3 + i) * 9, FLOOR_Y - h);
-      ctx.stroke();
+    // 海草摆动 —— 石头海沟和冰海底下不该长草，那两张图跳过
+    const floor = (MAPS[gmap] || MAPS.open).floor;
+    if (floor !== "rock" && floor !== "ice") {
+      ctx.strokeStyle = floor === "coral" ? "rgba(64,214,166,.55)" : "rgba(56,192,150,.5)";
+      ctx.lineWidth = 6;
+      for (let i = 0, n = Math.max(7, Math.round(W / 92)); i < n; i++) {
+        const x = 30 + i * 92, h = 34 + (i % 3) * 26;
+        ctx.beginPath(); ctx.moveTo(x, FLOOR_Y);
+        ctx.quadraticCurveTo(x + Math.sin(waveT * 1.3 + i) * 15, FLOOR_Y - h * 0.6,
+                             x + Math.sin(waveT * 1.3 + i) * 9, FLOOR_Y - h);
+        ctx.stroke();
+      }
     }
   }
 
@@ -1925,6 +2042,187 @@
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "#14212a";
     ctx.beginPath(); ctx.arc(x + r * 0.3 * look, y, Math.max(1.2, r * 0.45), 0, Math.PI * 2); ctx.fill();
+  }
+
+  function artStarfish(it) {                             // 海星：五角，表面一层小疣
+    const R = 20;
+    ctx.fillStyle = "#ff8f6b";
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + i * Math.PI / 5;
+      const r = i % 2 ? R * 0.42 : R;
+      ctx[i ? "lineTo" : "moveTo"](Math.cos(a) * r, Math.sin(a) * r);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.35)";
+    for (let i = 0; i < 5; i++) {
+      const a = -Math.PI / 2 + i * Math.PI * 2 / 5;
+      ctx.beginPath(); ctx.arc(Math.cos(a) * R * 0.5, Math.sin(a) * R * 0.5, 2.2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = "rgba(0,0,0,.18)";
+    ctx.beginPath(); ctx.arc(0, 0, 3.4, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function artSeahorse(it) {                             // 海马：弯脖子、卷尾巴、背上一排小鳍
+    const sw = Math.sin(it.wob) * 0.12;
+    ctx.save();
+    ctx.rotate(sw);
+    ctx.fillStyle = "#ffc65c";
+    ctx.beginPath();                                     // 身体：S 形
+    ctx.moveTo(2, -22);
+    ctx.quadraticCurveTo(13, -18, 9, -6);
+    ctx.quadraticCurveTo(4, 6, 7, 16);
+    ctx.quadraticCurveTo(9, 24, 1, 22);
+    ctx.quadraticCurveTo(4, 14, 0, 6);
+    ctx.quadraticCurveTo(-5, -4, -4, -14);
+    ctx.quadraticCurveTo(-4, -22, 2, -22);
+    ctx.fill();
+    ctx.beginPath();                                     // 吻
+    ctx.moveTo(2, -22); ctx.lineTo(13, -24); ctx.lineTo(3, -17); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#e09a2a"; ctx.lineWidth = 1.4;    // 背上的小棘
+    for (let i = 0; i < 5; i++) {
+      const y = -16 + i * 7;
+      ctx.beginPath(); ctx.moveTo(-3 + i * 0.6, y); ctx.lineTo(-8 + i * 0.4, y + 2); ctx.stroke();
+    }
+    ctx.fillStyle = "rgba(255,255,255,.5)";              // 背鳍
+    ctx.beginPath(); ctx.ellipse(4, 2, 3.4, 7, 0.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#3a2a12";
+    ctx.beginPath(); ctx.arc(3.5, -19, 1.9, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function artLobster(it) {                              // 龙虾：两只大钳、长触须、分节的尾
+    const c = Math.sin(it.t * 5) * 0.22;                 // 钳子一开一合
+    ctx.strokeStyle = "#c8451f"; ctx.lineWidth = 1.6;
+    ctx.beginPath();                                     // 触须
+    ctx.moveTo(16, -3); ctx.quadraticCurveTo(30, -12, 36, -22);
+    ctx.moveTo(16, 1);  ctx.quadraticCurveTo(32, -2, 40, -8);
+    ctx.stroke();
+    ctx.fillStyle = "#d4502a";
+    for (let sgn of [-1, 1]) {                           // 步足
+      for (let i = 0; i < 3; i++) {
+        ctx.save();
+        ctx.translate(2 - i * 8, 6 * sgn);
+        ctx.rotate(sgn * (0.5 + i * 0.14) + Math.sin(it.t * 6 + i) * 0.12);
+        ctx.fillRect(0, -1.4, 13, 2.8);
+        ctx.restore();
+      }
+    }
+    ctx.fillStyle = "#e2603a";                           // 尾节
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.ellipse(-8 - i * 5, 0, 6.5 - i * 0.7, 8.5 - i * 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = "#c8451f";
+    ctx.beginPath();                                     // 尾扇
+    ctx.moveTo(-27, 0); ctx.lineTo(-36, -8); ctx.lineTo(-33, 0); ctx.lineTo(-36, 8);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#e2603a";                           // 头胸甲
+    ctx.beginPath(); ctx.ellipse(4, 0, 14, 10, 0, 0, Math.PI * 2); ctx.fill();
+    for (let sgn of [-1, 1]) {                           // 大钳
+      ctx.save();
+      ctx.translate(15, 7 * sgn);
+      ctx.rotate(sgn * (0.35 + c));
+      ctx.fillStyle = "#d4502a";
+      ctx.beginPath(); ctx.ellipse(6, 0, 9, 5.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(12, -3); ctx.lineTo(23, -5 - c * 8); ctx.lineTo(13, 0); ctx.closePath(); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(12, 3); ctx.lineTo(23, 5 + c * 8); ctx.lineTo(13, 0); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+    ctx.fillStyle = "#2b1408";
+    ctx.beginPath(); ctx.arc(12, -4, 2, 0, Math.PI * 2);
+    ctx.arc(12, 4, 2, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function artManta(it) {                                // 蝠鲼：像在水里拍翅膀
+    const f = Math.sin(it.wob * 0.9);                    // 翅膀上下扇动
+    ctx.fillStyle = "#4a6b86";
+    ctx.beginPath();                                     // 菱形的大翅
+    ctx.moveTo(26, 0);
+    ctx.quadraticCurveTo(6, -10, -30, -18 - f * 8);
+    ctx.quadraticCurveTo(-14, -2, -34, 2);
+    ctx.quadraticCurveTo(-14, 4, -30, 18 + f * 8);
+    ctx.quadraticCurveTo(6, 10, 26, 0);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.22)";             // 背上的浅斑
+    ctx.beginPath(); ctx.ellipse(0, -6, 9, 4, -0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, 6, 9, 4, 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#4a6b86"; ctx.lineWidth = 2.4;    // 细长的尾
+    ctx.beginPath();
+    ctx.moveTo(-32, 0); ctx.quadraticCurveTo(-48, f * 5, -60, f * 9); ctx.stroke();
+    ctx.fillStyle = "#3a556c";                           // 头前的两只「角」
+    ctx.beginPath(); ctx.moveTo(24, -4); ctx.lineTo(34, -8); ctx.lineTo(25, -1); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(24, 4); ctx.lineTo(34, 8); ctx.lineTo(25, 1); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#0f1c26";
+    ctx.beginPath(); ctx.arc(22, -5, 2.2, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function artWhale(it) {                                // 鲸鱼：这一片海里最大的东西
+    const L = 200, hh = 44;
+    const sw = Math.sin(it.wob * 0.5) * 9;
+    ctx.fillStyle = "#4c6d8a";
+    ctx.beginPath();                                     // 尾鳍
+    ctx.moveTo(-L * 0.40, 0);
+    ctx.quadraticCurveTo(-L * 0.50, -6, -L * 0.56, -hh * 0.62 + sw);
+    ctx.quadraticCurveTo(-L * 0.44, -hh * 0.12, -L * 0.56, hh * 0.62 + sw);
+    ctx.quadraticCurveTo(-L * 0.50, 6, -L * 0.40, 0);
+    ctx.fill();
+    ctx.beginPath();                                     // 胸鳍
+    ctx.moveTo(L * 0.02, hh * 0.42);
+    ctx.quadraticCurveTo(-L * 0.06, hh * 0.95, -L * 0.16, hh * 0.72);
+    ctx.quadraticCurveTo(-L * 0.06, hh * 0.42, L * 0.02, hh * 0.42);
+    ctx.fill();
+
+    ctx.fillStyle = "#5d80a0";                           // 身体
+    ctx.beginPath();
+    ctx.moveTo(L * 0.46, 0);
+    ctx.quadraticCurveTo(L * 0.34, -hh * 0.86, L * 0.02, -hh * 0.9);
+    ctx.quadraticCurveTo(-L * 0.26, -hh * 0.82, -L * 0.40, 0);
+    ctx.quadraticCurveTo(-L * 0.26, hh * 0.86, L * 0.02, hh * 0.94);
+    ctx.quadraticCurveTo(L * 0.34, hh * 0.9, L * 0.46, 0);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(233,245,252,.85)";             // 白肚皮 + 腹褶
+    ctx.beginPath();
+    ctx.moveTo(L * 0.4, hh * 0.16);
+    ctx.quadraticCurveTo(L * 0.1, hh * 0.92, -L * 0.2, hh * 0.55);
+    ctx.quadraticCurveTo(L * 0.08, hh * 0.44, L * 0.4, hh * 0.16);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(90,130,160,.5)"; ctx.lineWidth = 1.6;
+    for (let i = 0; i < 6; i++) {
+      const x = L * 0.3 - i * L * 0.075;
+      ctx.beginPath();
+      ctx.moveTo(x, hh * 0.3); ctx.quadraticCurveTo(x - 6, hh * 0.55, x - 10, hh * 0.68);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#3d5e7a";                           // 背鳍
+    ctx.beginPath();
+    ctx.moveTo(-L * 0.16, -hh * 0.78);
+    ctx.lineTo(-L * 0.08, -hh * 1.12);
+    ctx.lineTo(-L * 0.02, -hh * 0.8);
+    ctx.closePath(); ctx.fill();
+
+    ctx.strokeStyle = "#22384a"; ctx.lineWidth = 2.4;    // 嘴线
+    ctx.beginPath();
+    ctx.moveTo(L * 0.46, hh * 0.08);
+    ctx.quadraticCurveTo(L * 0.3, hh * 0.3, L * 0.14, hh * 0.28);
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(L * 0.3, -hh * 0.22, 4.4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#10202c";
+    ctx.beginPath(); ctx.arc(L * 0.31, -hh * 0.22, 2.4, 0, Math.PI * 2); ctx.fill();
+
+    // 喷气孔时不时冒一小串泡
+    if (Math.sin(it.t * 1.3) > 0.93) {
+      ctx.fillStyle = "rgba(220,245,255,.6)";
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.arc(-L * 0.02, -hh * 0.95 - i * 9, 3 - i * 0.6, 0, Math.PI * 2); ctx.fill();
+      }
+    }
   }
 
   function artShark(it) {                                // 鲨鱼：吃得越多画得越大
@@ -2362,7 +2660,8 @@
     }
   }
 
-  const ART = { shark:artShark, ink:artInk, magnet:artMagnet, bighook:artBighook, watch:artWatch, turbo:artTurbo,
+  const ART = { shark:artShark, whale:artWhale, manta:artManta, lobster:artLobster,
+                seahorse:artSeahorse, starfish:artStarfish, ink:artInk, magnet:artMagnet, bighook:artBighook, watch:artWatch, turbo:artTurbo,
                 boot:artBoot, mine:artMine, fish:artFish, sword:artSword, angler:artAngler, boss:artBoss, squid:artSquid,
                 turtle:artTurtle, jelly:artJelly, puffer:artPuffer, crab:artCrab,
                 coin:artCoin, chest:artChest };
@@ -2398,8 +2697,8 @@
     ctx.globalAlpha = (fading ? 0.4 : 1) * nightAlpha(it);
     ctx.translate(it.x, it.y);
     // 水母、金币、宝箱没有朝向；其它按游动方向翻转
-    if (!["jelly", "coin", "chest", "mine", "boot", "magnet", "bighook", "watch", "turbo", "ink"]
-         .includes(it.kind.art)) ctx.scale(it.vx >= 0 ? 1 : -1, 1);
+    if (!["jelly", "coin", "chest", "mine", "boot", "magnet", "bighook", "watch", "turbo", "ink",
+          "starfish", "seahorse"].includes(it.kind.art)) ctx.scale(it.vx >= 0 ? 1 : -1, 1);
     ART[it.kind.art](it);
     ctx.restore();
     if (it.stun > 0) {                                 // 被震晕的小星星
@@ -2630,6 +2929,35 @@
   const SCENE_IDS = Object.keys(SCENES);
   let scene = "day", boltT = 0, boltNext = 5;
 
+  /* 地图 = 「在哪片海钓」，和天色（SCENES = 什么天气/时辰）是两条独立的轴，
+     所以每局是「地图 × 天色」的组合。地图不只是换皮：
+     `mul` 会乘到出鱼权重上，所以珊瑚礁真的小鱼多、深海沟真的大货多 ——
+     换了地方就得换打法，而不是同一片海刷不同滤镜。
+     没写进 mul 的种类保持原权重；写 0 就是这片海根本不出。 */
+  const MAPS = {
+    open:   { zh:"外海",     en:"Open Sea",     w:26, floor:"weed",
+              mul:{} },
+    reef:   { zh:"珊瑚礁",   en:"Coral Reef",   w:22, floor:"coral",
+              sea:["#2aa6cf","#158cb4","#06375a"],
+              mul:{ clown:2.6, small:2.2, seahorse:2.4, starfish:2.2, crab:1.8, lobster:1.6,
+                    jelly:1.5, puffer:1.6, angler:0.2, boss:0, whale:0, shark:0.5, manta:0.6 } },
+    trench: { zh:"深海沟",   en:"Deep Trench",  w:18, floor:"rock",
+              sea:["#0d4a6b","#07304a","#01101c"],
+              mul:{ angler:3, squid:2.2, shark:1.8, manta:1.6, whale:1.4, boss:1,
+                    clown:0.2, small:0.3, seahorse:0.2, starfish:0.3, coin:0.6 } },
+    wreck:  { zh:"沉船遗址", en:"Shipwreck",    w:18, floor:"wreck",
+              sea:["#1a7d9e","#0f5573","#031d30"],
+              mul:{ coin:2.4, boot:2.2, mine:2, magnet:1.6, watch:1.6, bighook:1.6, turbo:1.6,
+                    lobster:1.6, crab:1.5, whale:0.4, boss:0.6 } },
+    polar:  { zh:"极地海",   en:"Polar Sea",    w:16, floor:"ice",
+              sea:["#5fbfe0","#2e86ad","#062a44"],
+              mul:{ whale:3.2, big:1.8, manta:1.4, sword:1.4, shark:1.3,
+                    clown:0.2, seahorse:0.2, crab:0.4, lobster:0.4, jelly:0.6 } },
+  };
+  const MAP_IDS = Object.keys(MAPS);
+  let gmap = "open";
+  const mapName = id => (lang === "en" && MAPS[id].en) ? MAPS[id].en : MAPS[id].zh;
+
   /* 道具：钓到就生效一段时间。磁铁/大钩/快收线纯本地表现（联机也一致，
      因为抢鱼由服务器仲裁）；怀表要加时间，单人本地加、联机由服务器加。 */
   const POWERS = { magnet: { dur: 6 }, bighook: { dur: 8, mult: 1.8 },
@@ -2733,7 +3061,8 @@
         items = [];
         (m.items || []).forEach(netItem);
         timeLeft = m.time; fever = m.fever;
-        if (m.scene) setScene(m.scene);
+        if (m.map) gmap = MAPS[m.map] ? m.map : "open";
+        if (m.scene) setScene(m.scene);            // setScene 会重烘背景，地图要先定好
         netNote(spectating ? t("net_spectating", { room: NET.room }) : t("net_connected", { room: NET.room }), "ok");
         el.stage.classList.toggle("fever", !!m.fever);
         state = "playing";
@@ -2766,7 +3095,9 @@
         state = "playing";
         timeLeft = m.time; fever = false; bonusGiven = 0;
         if (m.dur) { roundTime = m.dur; renderDurSeg(); }
-        if (m.scene) { setScene(m.scene); announceScene(); }   // 联机天色由服务器统一
+        // 联机的地图和天色都由服务器统一下发，一屋子人同一片海
+        if (m.map) gmap = MAPS[m.map] ? m.map : "open";
+        if (m.scene) { setScene(m.scene); announceScene(); }
         coop = !!m.coop; coopTarget = m.target || 0; coopTeam = 0;
         el.stage.classList.remove("fever");
         NET.players = new Map((m.players || []).map(p => [p.id, p]));

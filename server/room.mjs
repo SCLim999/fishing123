@@ -21,6 +21,18 @@ export const bonusCap = dur => Math.round(dur * 0.42);
 export const OVER_HOLD  = 8;      // 结算停留几秒后回到大厅
 // 天色由服务器定，一屋子人才看到同一片天（权重要和客户端 SCENES 一致）
 export const SCENE_W = { day:38, dusk:20, night:25, storm:17 };
+
+/* 地图：和客户端 index.html 里的 MAPS 一一对应（名字和画法在客户端，
+   服务器只需要「挑哪张」和「出鱼权重怎么乘」）。改了记得两边一起改。
+   联机时地图由服务器定，跟天色一样随 start / welcome 下发，全房间同一片海。 */
+export const MAP_W = { open:26, reef:22, trench:18, wreck:18, polar:16 };
+export const MAP_MUL = {
+  open:   {},
+  reef:   { clown:2.6, small:2.2, crab:1.8, jelly:1.5, puffer:1.6, angler:0.2, boss:0, shark:0.5 },
+  trench: { angler:3, squid:2.2, boss:1, clown:0.2, small:0.3, coin:0.6 },
+  wreck:  { coin:2.4, boot:2.2, mine:2, magnet:1.6, watch:1.6, bighook:1.6, turbo:1.6, boss:0.6 },
+  polar:  { big:1.8, sword:1.4, clown:0.2, crab:0.4, jelly:0.6 },
+};
 const MAX_ITEMS = 26;
 const MAX_CHAIN = 8;
 
@@ -59,7 +71,18 @@ export const SPEC = {
 const SPEED = { coin:[12,28], swim:[24,64], drift:[6,14], paddle:[16,28],
                 jet:[26,46], crawl:[26,44], rise:[8,16] };
 const POOL = Object.keys(SPEC).filter(k => SPEC[k].w > 0);
-const POOL_TOTAL = POOL.reduce((s, k) => s + SPEC[k].w, 0);
+const weightOf = (k, map) => {
+  const mul = MAP_MUL[map] || MAP_MUL.open;
+  return SPEC[k].w * (mul[k] != null ? mul[k] : 1);
+};
+
+function pickMap() {
+  const ids = Object.keys(MAP_W);
+  const total = ids.reduce((a, k) => a + MAP_W[k], 0);
+  let r = Math.random() * total;
+  for (const k of ids) { if ((r -= MAP_W[k]) <= 0) return k; }
+  return "open";
+}
 
 function pickScene() {
   const ids = Object.keys(SCENE_W);
@@ -85,6 +108,7 @@ export class Room {
     this.state   = "lobby";        // lobby | playing | over
     this.roundTime = GAME_TIME;    // 本局时长（30 / 60 / 120）
     this.scene = "day";            // 本局天色
+    this.map   = "open";           // 本局在哪片海
     this.coop = false;             // 合作模式：全房间共用一个目标分
     this.target = 0;
     this.timeLeft = GAME_TIME;
@@ -126,7 +150,7 @@ export class Room {
                 spec: !!spec, hook: { x: W / 2, y: SEA_Y, st: "idle", n: 0 } };
     this.players.set(id, p);
     this.sendTo(id, { t: "welcome", you: id, state: this.state, time: Math.ceil(this.timeLeft),
-                      fever: this.fever, dur: this.roundTime, scene: this.scene, spec: p.spec,
+                      fever: this.fever, dur: this.roundTime, scene: this.scene, map: this.map, spec: p.spec,
                       coop: this.coop, target: this.target,
                       players: this.playerList(), items: this.itemList(), specs: this.specCount() });
     this.broadcast({ t: "joined", p: { id: p.id, name: p.name, score: 0, spec: p.spec },
@@ -229,6 +253,7 @@ export class Room {
   startRound(dur, coop = false) {
     this.roundTime = DURATIONS.includes(+dur) ? +dur : GAME_TIME;
     this.scene = pickScene();
+    this.map   = pickMap();
     this.coop = !!coop;
     const fishers = Math.max(1, this.playerList().length);
     // 目标分按人头和局时缩放，人多不能白送
@@ -236,7 +261,7 @@ export class Room {
     this.reset("playing");
     for (const p of this.players.values()) { p.score = 0; p.combo = 0; }
     this.broadcast({ t: "start", time: this.roundTime, dur: this.roundTime,
-                     scene: this.scene, coop: this.coop, target: this.target,
+                     scene: this.scene, map: this.map, coop: this.coop, target: this.target,
                      players: this.playerList() });
     for (let i = 0; i < 12; i++) this.spawnOne(true);   // 开局先铺一片鱼
     this.flushSpawns();
@@ -270,9 +295,11 @@ export class Room {
     if (this.items.size >= MAX_ITEMS) return null;
     let kind = forceKind;
     if (!kind) {
-      let r = Math.random() * POOL_TOTAL;
-      kind = POOL[0];
-      for (const k of POOL) { if ((r -= SPEC[k].w) <= 0) { kind = k; break; } }
+      const total = POOL.reduce((a, k) => a + weightOf(k, this.map), 0);
+      let r = Math.random() * total;
+      kind = null;
+      for (const k of POOL) { if ((r -= weightOf(k, this.map)) <= 0) { kind = k; break; } }
+      if (!kind) kind = POOL.find(k => weightOf(k, this.map) > 0) || POOL[0];
     }
     const spec = SPEC[kind];
     const dir  = Math.random() < 0.5 ? 1 : -1;
