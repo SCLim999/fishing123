@@ -115,6 +115,34 @@
   @media (min-width:430px){ .price.wide{grid-template-columns:auto auto auto auto} }
   .tip{color:#8fb6cf;font-size:.78rem;margin-top:8px;text-align:center;line-height:1.6}
 
+  /* 造船厂 */
+  .yard{display:flex;flex-direction:column;gap:7px;width:min(100%,30em)}
+  .yard-head{
+    display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;
+    font-size:.86rem;color:#cfe6f2;
+  }
+  .yard-head b{color:var(--gold);font-variant-numeric:tabular-nums}
+  .up{
+    display:flex;align-items:center;gap:10px;text-align:left;
+    background:rgba(0,0,0,.34);border:1px solid rgba(255,210,74,.3);
+    border-radius:10px;padding:8px 11px;
+  }
+  .up .u-ico{font-size:1.35rem;flex:0 0 auto;line-height:1}
+  .up .u-body{flex:1 1 auto;min-width:0}
+  .up .u-n{font-size:.85rem;font-weight:800;color:#e8f6ff}
+  .up .u-e{font-size:.74rem;color:#a8c8da;margin-top:2px}
+  .up .u-dots{display:flex;gap:3px;margin-top:4px}
+  .up .u-dots i{width:16px;height:5px;border-radius:3px;background:rgba(255,255,255,.18)}
+  .up .u-dots i.on{background:var(--gold)}
+  .up button{
+    flex:0 0 auto;background:linear-gradient(180deg,#7fd3ff,#2b8fd0);color:#04212f;
+    font-weight:900;border:2px solid #14577e;border-radius:8px;padding:7px 11px;
+    font-size:.8rem;cursor:pointer;white-space:nowrap;font-family:inherit;
+  }
+  .up button:disabled{background:rgba(255,255,255,.12);color:#8fa8b8;border-color:#33505f;cursor:default}
+  .up button.maxed{background:linear-gradient(180deg,#8bf5a8,#3aa860);border-color:#1e6b3c;color:#04210f}
+  .yard-note{font-size:.74rem;color:#8fb6cf;line-height:1.5}
+
   /* 结算页的标签页 */
   .tabs{display:flex;gap:6px;margin:2px 0 4px}
   .tabs button{
@@ -306,6 +334,15 @@
         <button id="btn-daily" data-i18n="daily_btn">每日挑战</button>
       </div>
       <div class="mp-note" id="daily-note" style="display:none"></div>
+      <button class="mp-btn" id="btn-yard" data-i18n="yard_btn">🛠 造船厂</button>
+      <div class="yard" id="yard" style="display:none">
+        <div class="yard-head">
+          <span data-i18n="yard_coins">金币</span> <b id="yard-coins">0</b>
+          <span style="opacity:.7" data-i18n="yard_rate"></span>
+        </div>
+        <div id="yard-list"></div>
+        <div class="yard-note" data-i18n="yard_note"></div>
+      </div>
       <div class="price wide" id="menu-price"></div>
       <div class="rank" id="menu-rank"></div>
       <button class="cta" id="btn-start" data-i18n="btn_start">单人开钓</button>
@@ -336,6 +373,7 @@
         <div class="price" id="over-table"></div>
         <p id="over-miss"></p>
         <p id="over-achv"></p>
+        <p id="over-coins"></p>
         <p id="over-dex"></p>
         <p id="over-best"></p>
         <div class="rank" id="over-rank"></div>
@@ -431,6 +469,11 @@
       pop_eaten:"🦈 {name} 被吃了",
       map_here:"📍 {name}",
       map_label:"海域",
+      yard_btn:"🛠 造船厂", yard_coins:"金币", yard_rate:"（每 12 分换 1 枚）",
+      yard_lv:"{lv} / {max} 级", yard_buy:"{n} 金", yard_max:"满级",
+      yard_note:"升级只在单人普通局生效 —— 联机和每日挑战都跑白板数值，那样才公平。",
+      coins_got:"这一局赚到 {n} 金　·　现有 {total} 金",
+      yard_done:"{name} 升到 {lv} 级！",
       tab_sum:"战果", tab_fish:"钓到的鱼",
       fish_none:"这一局什么都没钓上来 —— 下一竿挑鱼多的那一竖排。",
       fish_count:"×{n}",
@@ -503,6 +546,11 @@
       pop_eaten:"🦈 ate the {name}",
       map_here:"📍 {name}",
       map_label:"Waters",
+      yard_btn:"🛠 Shipyard", yard_coins:"Coins", yard_rate:"(1 per 12 points)",
+      yard_lv:"Lv {lv} / {max}", yard_buy:"{n} coins", yard_max:"Maxed",
+      yard_note:"Upgrades apply to normal solo rounds only — online and the daily challenge always run a stock boat, so the comparison stays fair.",
+      coins_got:"Earned {n} coins this round　·　{total} in the hold",
+      yard_done:"{name} is now level {lv}!",
       tab_sum:"Results", tab_fish:"Your catch",
       fish_none:"Nothing came up this round — aim for a column with more fish.",
       fish_count:"×{n}",
@@ -641,7 +689,12 @@
   // 普通抽取池（宝箱和巨兽有自己的计时器，权重设 0）
   const POOL = Object.keys(KINDS).filter(k => KINDS[k].w > 0);
   // 权重 = 基础权重 × 当前地图的倍率（表里没写就是 1）
-  const weightOf = k => KINDS[k].w * (MAPS[gmap].mul[k] != null ? MAPS[gmap].mul[k] : 1);
+  const weightOf = k => {
+    const mapMul = MAPS[gmap].mul[k] != null ? MAPS[gmap].mul[k] : 1;
+    // 🍀 运气：只抬 300 分以上的大货，小鱼权重不动
+    const luck = (KINDS[k].score >= 300 ? 1 + lv("luck") * 0.14 : 1);
+    return KINDS[k].w * mapMul * luck;
+  };
   const maxItems = () => Math.round(26 * widthScale());
 
   // ───────────────────────── 状态 ─────────────────────────
@@ -753,6 +806,11 @@
     dexCount: document.getElementById("dex-count"),
     achvHead: document.getElementById("achv-head"),
     overDex:  document.getElementById("over-dex"),
+    overCoins: document.getElementById("over-coins"),
+    yardBtn: document.getElementById("btn-yard"),
+    yard:    document.getElementById("yard"),
+    yardCoins: document.getElementById("yard-coins"),
+    yardList:  document.getElementById("yard-list"),
     overTabs: document.getElementById("over-tabs"),
     paneSum:  document.getElementById("pane-sum"),
     paneFish: document.getElementById("pane-fish"),
@@ -838,6 +896,42 @@
   };
   /* 成就：跨局累积，存在浏览器里。局末统一判定（有些条件必须等一局结束才知道），
      判定只读这一局的统计 roundStat，不去翻历史。 */
+  /* 造船厂：跨局累积的养成。每局结算按分数折算成金币，金币买升级，
+     升级直接改真实数值（收线速度、命中范围、串钩上限、局时、大货权重）。
+
+     只在**单人普通局**生效 —— 联机开了就是花钱变强，对别人不公平；
+     每日挑战是全球同一片海比分数，装备不同就没得比。这两种都跑「白板」数值。 */
+  const BOAT_KEY = "treasureCove.boat.v1";
+  const UPGRADES = [
+    { id:"line",  zh:"鱼线",   en:"Line",    icon:"🧵", max:5, cost:l => 120 + l * 110,
+      zhE:"收线速度 +8%/级",     enE:"+8% reel speed per level" },
+    { id:"hook",  zh:"鱼钩",   en:"Hook",    icon:"🪝", max:5, cost:l => 150 + l * 130,
+      zhE:"命中范围 +9%/级",     enE:"+9% hook reach per level" },
+    { id:"winch", zh:"绞盘",   en:"Winch",   icon:"⚙️", max:3, cost:l => 400 + l * 350,
+      zhE:"一钩多串 1 个/级",    enE:"+1 to the chain limit per level" },
+    { id:"hull",  zh:"船体",   en:"Hull",    icon:"⛵", max:4, cost:l => 300 + l * 260,
+      zhE:"每局 +3 秒/级",       enE:"+3s of round time per level" },
+    { id:"luck",  zh:"运气",   en:"Luck",    icon:"🍀", max:4, cost:l => 350 + l * 300,
+      zhE:"大货出现率 +14%/级",  enE:"+14% big-catch spawn rate per level" },
+  ];
+  const boat = { coins: 0 };
+  UPGRADES.forEach(u => boat[u.id] = 0);
+  try {
+    const raw = JSON.parse(localStorage.getItem(BOAT_KEY) || "{}");
+    boat.coins = Math.max(0, Math.round(+raw.coins || 0));
+    UPGRADES.forEach(u => boat[u.id] = clampInt(raw[u.id], 0, u.max));
+  } catch (_) {}
+  function clampInt(v, lo, hi) { v = Math.round(+v || 0); return v < lo ? lo : v > hi ? hi : v; }
+  const saveBoat = () => { try { localStorage.setItem(BOAT_KEY, JSON.stringify(boat)); } catch (_) {} };
+
+  /* 升级只在单人普通局生效 —— 一个开关管住所有效果，
+     省得每处都写一遍「联机和每日不算」然后漏掉一处。 */
+  const boatOn = () => !online && !daily;
+  const lv = id => boatOn() ? boat[id] : 0;
+
+  const COIN_PER = 12;                             // 多少分换 1 枚金币
+  const coinsFor = sc => Math.max(0, Math.floor(sc / COIN_PER));
+
   const ACHV_KEY = "treasureCove.achv.v1";
   const ACHIEVEMENTS = [
     { id:"chain8",  zh:"一钩串满 8 个",     en:"Chain of 8 in one haul",   test:r => r.maxChain >= 8 },
@@ -1117,7 +1211,8 @@
   }
 
   function resetGame() {
-    score = 0; timeLeft = roundTime; combo = 0; caught = {}; earned = {}; newSeen = [];
+    score = 0; combo = 0; caught = {}; earned = {}; newSeen = [];
+    timeLeft = roundTime + lv("hull") * 3;         // ⛵ 船体：每级多 3 秒
     items = []; pops = []; sparks = [];
     hook = { state:"idle", x:W/2, y:SEA_Y, catches:[], pull:0 };
     struggle = null;                 // 上一局时间到时可能正拉着大货，没清的话这一局点屏全被 QTE 吃掉
@@ -1178,6 +1273,8 @@
       (bonus > 0 ? t("bonus_line", { n: bonus }) : "") +
       (score >= best && score > 0 ? t("newrec") : t("best_gap", { b: best, d: best - score }));
     paintAchvLine();
+    el.overCoins.textContent = lastCoins > 0
+      ? t("coins_got", { n: lastCoins, total: boat.coins }) : "";
     renderFishPane();                           // 语言切换重画时也要跟着更新
   }
 
@@ -1199,6 +1296,9 @@
     }
     if (daily) { saveDaily(score); refreshDaily(); }
     lastGotA = checkAchievements();
+    // 只有单人普通局才赚金币：联机和每日都跑白板，也不该产出养成资源
+    lastCoins = boatOn() ? coinsFor(score) : 0;
+    if (lastCoins > 0) { boat.coins += lastCoins; saveBoat(); }
     paintSoloResults(entry);
     renderDex();
     repaintResults = () => paintSoloResults(entry);
@@ -1213,7 +1313,8 @@
   }
 
   // ───────────────────────── 放钩 / 收线 ─────────────────────────
-  const MAX_CHAIN = 8;                             // 一趟最多串几个
+  const MAX_CHAIN = 8;                             // 一趟最多串几个（⚙️ 绞盘每级 +1）
+  const chainCap = () => MAX_CHAIN + lv("winch");
   const SEEN_POP_Y = SEA_Y + 108;                  // 图鉴解锁提示的高度
 
   /* 每局随机 3 个小目标：除了「分数越高越好」，再给点具体的追求。
@@ -1243,6 +1344,7 @@
 
 
   let lastGotA = [];                               // 这一局刚解锁的成就 id，重画结算页时要用
+  let lastCoins = 0;                               // 这一局赚到的金币
 
   // 这一局的统计，成就判定只看它
   let roundStat = { maxChain:0, maxCombo:0, powersUsed:0, score:0, mineHits:0, scene:"day", caught:{},
@@ -1380,9 +1482,10 @@
   // 空钩拉得飞快；挂上东西后取最难拉的那个，每多挂一个再慢一档
   function pullSpeed() {
     const turbo = powers.turbo > 0 ? POWERS.turbo.mult : 1;
-    if (!hook.catches.length) return 470 * turbo;
+    const line  = 1 + lv("line") * 0.08;           // 🧵 鱼线：收得更快
+    if (!hook.catches.length) return 470 * turbo * line;
     const slowest = Math.min(...hook.catches.map(c => c.kind.pull));
-    return Math.max(45, slowest * Math.pow(0.85, hook.catches.length - 1)) * turbo;
+    return Math.max(45, slowest * Math.pow(0.85, hook.catches.length - 1)) * turbo * line;
   }
 
   // 把串上的东西一个接一个挂在钩子下面
@@ -1397,10 +1500,11 @@
   }
 
   function tryHook() {
-    if (hook.catches.length >= MAX_CHAIN) return false;
+    if (hook.catches.length >= chainCap()) return false;
     let hit = null, bestD = Infinity;
     for (const it of items) {
-      const reach = powers.bighook > 0 ? POWERS.bighook.mult : 1;
+      // 🪝 鱼钩：命中范围本身变大，和「大钩」道具叠乘
+      const reach = (powers.bighook > 0 ? POWERS.bighook.mult : 1) * (1 + lv("hook") * 0.09);
       const dx = (hook.x - it.x) / (it.kind.hw * reach + 4), dy = (hook.y - it.y) / (it.kind.hh * reach + 4);
       const d  = dx * dx + dy * dy;
       if (d <= 1 && d < bestD) { bestD = d; hit = it; }
@@ -3335,6 +3439,7 @@
     refreshDaily();                                // 每日挑战说明也要换语言
     renderDex();                                   // 图鉴里的鱼名
     renderRanks(el.menuRank);                      // 排行榜表头
+    if (el.yard.style.display !== "none") renderYard();
     if (!el.over.classList.contains("hidden") && repaintResults) repaintResults();
   }
 
@@ -3631,6 +3736,72 @@
       el.fishList.appendChild(card);
     }
   }
+
+  /* 造船厂面板。每次开关 / 买完 / 切语言都整块重画 —— 这点 DOM 很便宜，
+     比零散地改 textContent 更不容易漏掉某处。 */
+  function renderYard() {
+    el.yardCoins.textContent = boat.coins;
+    el.yardList.innerHTML = "";
+    for (const u of UPGRADES) {
+      const l = boat[u.id], maxed = l >= u.max, price = maxed ? 0 : u.cost(l);
+      const row = document.createElement("div");
+      row.className = "up";
+
+      const ico = document.createElement("div");
+      ico.className = "u-ico"; ico.textContent = u.icon;
+
+      const body = document.createElement("div");
+      body.className = "u-body";
+      const name = document.createElement("div");
+      name.className = "u-n";
+      name.textContent = `${lang === "en" ? u.en : u.zh}　${t("yard_lv", { lv: l, max: u.max })}`;
+      const eff = document.createElement("div");
+      eff.className = "u-e";
+      eff.textContent = lang === "en" ? u.enE : u.zhE;
+      const dots = document.createElement("div");
+      dots.className = "u-dots";
+      for (let i = 0; i < u.max; i++) {
+        const d = document.createElement("i");
+        if (i < l) d.className = "on";
+        dots.appendChild(d);
+      }
+      body.appendChild(name); body.appendChild(eff); body.appendChild(dots);
+
+      const buy = document.createElement("button");
+      if (maxed) { buy.textContent = t("yard_max"); buy.className = "maxed"; buy.disabled = true; }
+      else {
+        buy.textContent = t("yard_buy", { n: price });
+        buy.disabled = boat.coins < price;
+        buy.addEventListener("click", e => { e.stopPropagation(); buyUpgrade(u.id); });
+      }
+
+      row.appendChild(ico); row.appendChild(body); row.appendChild(buy);
+      el.yardList.appendChild(row);
+    }
+  }
+
+  function buyUpgrade(id) {
+    const u = UPGRADES.find(x => x.id === id);
+    if (!u) return;
+    const l = boat[id];
+    if (l >= u.max) return;
+    const price = u.cost(l);
+    if (boat.coins < price) return;                // 按钮本来就禁用了，这里再守一道
+    boat.coins -= price;
+    boat[id] = l + 1;
+    saveBoat();
+    renderYard();
+    fanfare();
+    pop(W / 2, SEA_Y + 150, t("yard_done", { name: lang === "en" ? u.en : u.zh, lv: boat[id] }),
+        "#ffd24a", 21);
+  }
+
+  el.yardBtn.addEventListener("click", e => {
+    e.stopPropagation();
+    const open = el.yard.style.display === "none";
+    el.yard.style.display = open ? "" : "none";
+    if (open) renderYard();
+  });
 
   function showPane(which) {
     el.paneSum.classList.toggle("hidden", which !== "sum");
