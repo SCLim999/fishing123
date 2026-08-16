@@ -200,6 +200,27 @@
   }
   body.immersive canvas{height:100%;width:auto;max-width:100%}
 
+  /* SUPER FEVER：比 FEVER 还夸张一档，金色 */
+  .stage.superfever{
+    box-shadow:0 0 0 4px #ffd24a,0 0 60px rgba(255,200,60,.85),0 18px 46px rgba(0,0,0,.55);
+    animation:blaze .6s ease-in-out infinite;
+  }
+  @keyframes blaze{50%{box-shadow:0 0 0 5px #fff3c4,0 0 80px rgba(255,225,120,1),0 18px 46px rgba(0,0,0,.55)}}
+  @media (prefers-reduced-motion: reduce){ .stage.superfever{animation:none} }
+
+  /* 藏宝图进度 + 入口 */
+  .shard-row{display:flex;align-items:center;justify-content:center;gap:8px;font-size:.84rem;color:#cfe6f2}
+  .shard-row .pips{display:flex;gap:4px}
+  .shard-row .pips i{
+    width:15px;height:18px;border-radius:2px;background:rgba(255,255,255,.16);
+    clip-path:polygon(0 8%,22% 0,55% 10%,100% 4%,92% 55%,100% 96%,48% 88%,8% 100%);
+  }
+  .shard-row .pips i.on{background:var(--gold)}
+  .cta.super{
+    background:linear-gradient(180deg,#ffe98a,#f0a81c);border-color:#8a5a00;color:#3a2200;
+    animation:blaze .8s ease-in-out infinite;
+  }
+
   /* FEVER：机框发烫 */
   .stage.fever{
     box-shadow:0 0 0 3px #ff9b3d,0 0 34px rgba(255,140,50,.6),0 18px 46px rgba(0,0,0,.55);
@@ -334,6 +355,12 @@
         <button id="btn-daily" data-i18n="daily_btn">每日挑战</button>
       </div>
       <div class="mp-note" id="daily-note" style="display:none"></div>
+      <div class="shard-row">
+        <span data-i18n="shard_label">藏宝图</span>
+        <span class="pips" id="shard-pips"></span>
+        <span id="shard-note" style="opacity:.75"></span>
+      </div>
+      <button class="cta super" id="btn-super" style="display:none" data-i18n="super_btn">🗺 进入 SUPER FEVER</button>
       <button class="mp-btn" id="btn-yard" data-i18n="yard_btn">🛠 造船厂</button>
       <div class="yard" id="yard" style="display:none">
         <div class="yard-head">
@@ -469,6 +496,13 @@
       pop_eaten:"🦈 {name} 被吃了",
       map_here:"📍 {name}",
       map_label:"海域",
+      shard_label:"藏宝图", shard_get:"🗺 地图碎片 {n}/{max}",
+      shard_full:"🗺 藏宝图集齐了！开始画面进入 SUPER FEVER",
+      shard_note:"（{n}/{max}　海里偶尔会出）", shard_ready:"（集齐了！）",
+      super_btn:"🗺 进入 SUPER FEVER", super_go:"SUPER FEVER TIME！",
+      super_sub:"45 秒　全是大货　得分 ×3　没有水雷",
+      hud_super:"SUPER FEVER ×3",
+      super_over:"SUPER FEVER 结束　这一局 {n} 分",
       yard_btn:"🛠 造船厂", yard_coins:"金币", yard_rate:"（每 12 分换 1 枚）",
       yard_lv:"{lv} / {max} 级", yard_buy:"{n} 金", yard_max:"满级",
       yard_note:"鱼线 / 鱼钩 / 绞盘 联机照常生效。船体和运气改的是整个房间共用的世界（倒计时、出什么鱼），服务器统一发，没法只给一个人加 —— 所以联机里那两条不算。每日挑战全部跑白板，那样才有得比。",
@@ -547,6 +581,13 @@
       pop_eaten:"🦈 ate the {name}",
       map_here:"📍 {name}",
       map_label:"Waters",
+      shard_label:"Treasure map", shard_get:"🗺 Map piece {n}/{max}",
+      shard_full:"🗺 The map is complete! SUPER FEVER waits on the menu",
+      shard_note:"({n}/{max}　they surface now and then)", shard_ready:"(complete!)",
+      super_btn:"🗺 Enter SUPER FEVER", super_go:"SUPER FEVER TIME!",
+      super_sub:"45s　all big catches　×3 score　no mines",
+      hud_super:"SUPER FEVER ×3",
+      super_over:"SUPER FEVER over　{n} points",
       yard_btn:"🛠 Shipyard", yard_coins:"Coins", yard_rate:"(1 per 12 points)",
       yard_lv:"Lv {lv} / {max}", yard_buy:"{n} coins", yard_max:"Maxed",
       yard_note:"Line, hook and winch work online too. Hull and luck change the room's shared world — the clock and what spawns — which the server sends to everyone, so they can't apply to one player alone and are off online. The daily challenge always runs a stock boat so the scores stay comparable.",
@@ -650,6 +691,8 @@
      score 分数 / pull 收线速度(px/s，越慢越难拉) / depth 出现深度(0=水面 1=海底)
      hw,hh 命中半径 / lo 分数标签离中心的高度 / w 出现权重 / art 画法 / move 行为   */
   const KINDS = {
+    shard:  { name:"地图碎片", en:"Map Piece",  score:120,  pull:270, depth:[0.20,0.92], hw:22, hh:22, lo:32, w:3,
+              art:"shard",   move:"coin", label:"🗺", labelColor:"#ffd24a" },
     coin:   { name:"金币",     en:"Coin",     score:10,   pull:340, depth:[0.02,0.95], hw:17, hh:17, lo:26, w:24, art:"coin",  move:"coin"  },
     clown:  { name:"小丑鱼",   en:"Clownfish",   score:20,   pull:320, depth:[0.02,0.30], hw:23, hh:14, lo:26, w:12, art:"fish",  move:"swim", len:34, color:"#ff9145", fin:"#e2621c", stripe:true },
     small:  { name:"小蓝鱼",   en:"Blue Fish",   score:30,   pull:300, depth:[0.05,0.40], hw:25, hh:15, lo:28, w:13, art:"fish",  move:"swim", len:38, color:"#7fd3ff", fin:"#3f9dd6" },
@@ -689,13 +732,19 @@
               hazard:true, penalty:3, label:"-3s", labelColor:"#ff8a7a" },
   };
   // 普通抽取池（宝箱和巨兽有自己的计时器，权重设 0）
-  const POOL = Object.keys(KINDS).filter(k => KINDS[k].w > 0);
+  /* 出鱼池子：基础权重 > 0 的，加上「某张图用 add 把它加进来」的（宝箱、巨兽）。
+     MAPS 在下面很远处才声明，所以这里不能在初始化时就算 —— 第一次用到再算并缓存。 */
+  let _pool = null;
+  const pool = () => _pool || (_pool = Object.keys(KINDS).filter(k =>
+    KINDS[k].w > 0 || Object.values(MAPS).some(m => m.add && m.add[k] > 0)));
   // 权重 = 基础权重 × 当前地图的倍率（表里没写就是 1）
   const weightOf = k => {
-    const mapMul = MAPS[gmap].mul[k] != null ? MAPS[gmap].mul[k] : 1;
+    const MP = MAPS[gmap] || MAPS.open;
+    const mapMul = MP.mul[k] != null ? MP.mul[k] : 1;
+    const mapAdd = (MP.add && MP.add[k]) || 0;     // 基础权重是 0 的（宝箱/巨兽）只能靠加法进池子
     // 🍀 运气：只抬 300 分以上的大货，小鱼权重不动
     const luck = (KINDS[k].score >= 300 ? 1 + lv("luck") * 0.14 : 1);
-    return KINDS[k].w * mapMul * luck;
+    return (KINDS[k].w * mapMul + mapAdd) * luck;
   };
   const maxItems = () => Math.round(26 * widthScale());
 
@@ -809,6 +858,9 @@
     achvHead: document.getElementById("achv-head"),
     overDex:  document.getElementById("over-dex"),
     overCoins: document.getElementById("over-coins"),
+    shardPips: document.getElementById("shard-pips"),
+    shardNote: document.getElementById("shard-note"),
+    superBtn: document.getElementById("btn-super"),
     yardBtn: document.getElementById("btn-yard"),
     yard:    document.getElementById("yard"),
     yardCoins: document.getElementById("yard-coins"),
@@ -834,6 +886,8 @@
      真实存在的物种写的是真事；金鱼 / 鱼王 / 巨兽 / 宝箱这些是机台上编出来的，
      就按传说和玩法来写，别混成一副"科普"的样子骗人。 */
   const FACTS = {
+    shard:   { zh:"藏宝图撕成几片分开保管，是海盗故事里的经典桥段 —— 现实里更常见的是把坐标记在航海日志里，一张图丢了就全没了。",
+               en:"Splitting a treasure map into pieces is pirate-story shorthand. Real crews were likelier to keep bearings in the ship's log — lose the one book and everything went with it." },
     coin:    { zh:"海底的金币多半来自沉船。船一沉，货就散在沙里，几百年后被洋流慢慢刨出来。",
                en:"Coins on the seabed usually come from wrecks — cargo scatters into the sand and currents uncover it centuries later." },
     clown:   { zh:"小丑鱼住在海葵的触手里，靠身上一层黏液不被蜇到。一群里体型最大的那条会变成雌鱼。",
@@ -939,6 +993,17 @@
 
   const COIN_PER = 12;                             // 多少分换 1 枚金币
   const coinsFor = sc => Math.max(0, Math.floor(sc / COIN_PER));
+
+  /* 藏宝图碎片：一局一局攒，集齐 5 片解锁一次 SUPER FEVER 关卡。
+     碎片本身也值 120 分，所以就算不为了关卡，钓到也不亏。
+     只在单人局出（联机的世界由服务器发鱼，它的鱼表里没有 shard）。 */
+  const SHARD_KEY = "treasureCove.shards.v1";
+  const SHARD_MAX = 5;
+  let shards = 0;
+  try { shards = clampInt(JSON.parse(localStorage.getItem(SHARD_KEY) || "0"), 0, SHARD_MAX); } catch (_) {}
+  const saveShards = () => { try { localStorage.setItem(SHARD_KEY, String(shards)); } catch (_) {} };
+  let superRun = false;                            // 这一局是不是 SUPER FEVER 关卡
+  const SUPER_TIME = 45, SUPER_MULT = 2;           // 固定 45 秒；分数在 FEVER 的 ×1.5 之上再 ×2
 
   const ACHV_KEY = "treasureCove.achv.v1";
   const ACHIEVEMENTS = [
@@ -1177,10 +1242,11 @@
   }
 
   function spawnRandom() {
-    const total = POOL.reduce((a, k) => a + weightOf(k), 0);
+    const P = pool();
+    const total = P.reduce((a, k) => a + weightOf(k), 0);
     let r = gRnd() * total, id = null;
-    for (const k of POOL) { if ((r -= weightOf(k)) <= 0) { id = k; break; } }
-    if (!id) id = POOL.find(k => weightOf(k) > 0) || POOL[0];   // 极端情况兜底
+    for (const k of P) { if ((r -= weightOf(k)) <= 0) { id = k; break; } }
+    if (!id) id = P.find(k => weightOf(k) > 0) || P[0];         // 极端情况兜底
     spawn(id);
   }
 
@@ -1235,8 +1301,17 @@
     roundStat = { maxChain:0, maxCombo:0, powersUsed:0, score:0, mineHits:0, scene, caught:{},
                   mpRank:0, mpPlayers:0, sharkMeals:0 };
     rollMissions();
-    if (!online) { gmap = pickMap(); setScene(pickScene()); announceScene(); }
-    el.stage.classList.remove("fever");
+    if (superRun) {                                // 秘境：固定 45 秒、固定地图、全程 FEVER
+      timeLeft = SUPER_TIME;
+      gmap = "vault";
+      setScene("day");
+      fever = true;
+      missions = [];                               // 45 秒的爽局不塞小目标
+    } else if (!online) {
+      gmap = pickMap(); setScene(pickScene()); announceScene();
+    }
+    el.stage.classList.toggle("fever", !superRun && fever);
+    el.stage.classList.toggle("superfever", superRun);
     for (let i = 0, n = Math.round(14 * widthScale()); i < n; i++) {   // 开局就有一片鱼群
       spawnRandom();
       const it = items[items.length - 1];
@@ -1252,6 +1327,7 @@
 
   function startGame() {
     resetGame();
+    el.stage.classList.toggle("superfever", superRun);
     state = "playing";
     el.menu.classList.add("hidden");
     el.over.classList.add("hidden");
@@ -1289,6 +1365,9 @@
   function endGame() {
     state = "over";
     struggle = null;
+    const wasSuper = superRun;
+    superRun = false;                              // 结算完就退出关卡状态
+    el.stage.classList.remove("superfever");
     showPane("sum");                            // 每局结算先看战果，鱼那栏点了再看
     el.overPlayers.style.display = "none";
     el.overRank.style.display = "";
@@ -1303,6 +1382,8 @@
       entry.at = ranks.find(x => x.sc === score)?.at || entry.at;
     }
     if (daily) { saveDaily(score); refreshDaily(); }
+    if (wasSuper) pop(W / 2, SEA_Y + 150, t("super_over", { n: score }), "#ffd24a", 22);
+    renderShards();
     lastGotA = checkAchievements();
     lastCoins = coinsOn() ? coinsFor(score) : 0;
     if (lastCoins > 0) { boat.coins += lastCoins; saveBoat(); }
@@ -1592,6 +1673,16 @@
     if (navigator.vibrate) try { navigator.vibrate(90); } catch (_) {}
   }
 
+  function gotShard() {
+    if (shards >= SHARD_MAX) return;               // 已经集齐了，多钓的就只当 120 分
+    shards++;
+    saveShards();
+    const done = shards >= SHARD_MAX;
+    pop(hook.x, SEA_Y + 78, t(done ? "shard_full" : "shard_get", { n: shards, max: SHARD_MAX }),
+        "#ffd24a", done ? 24 : 20);
+    done ? fanfare() : beep(1046, 0.14, "triangle", 0.05);
+  }
+
   function activatePower(id, atX, atY) {
     const k = KINDS[id], P = POWERS[k.power];
     if (!P) return;
@@ -1640,7 +1731,8 @@
           hazardHit(it, hook.x, SEA_Y + 16 + i * 22);
           return;
         }
-        const gained = Math.round(itemScore(it) * comboMult() * (fever ? FEVER_MULT : 1));
+        const gained = Math.round(itemScore(it) * comboMult()
+                                  * (fever ? FEVER_MULT : 1) * (superRun ? SUPER_MULT : 1));
         score += gained;
         combo++;                                   // 一串里每一个都算一次连击
         roundStat.maxCombo = Math.max(roundStat.maxCombo, combo);
@@ -1657,6 +1749,7 @@
         if (itemScore(it) > itemScore(biggest)) biggest = it;
         if (it.id === "shark") roundStat.sharkMeals = Math.max(roundStat.sharkMeals || 0, it.meals || 0);
         missionEvent({ kind: it.id, chain: list.length, combo, fever });
+        if (it.id === "shard") gotShard();
         if (it.id === "puffer") applyBurst("puffer", it.x, it.y);
         if (it.kind.power) activatePower(it.id, hook.x, SEA_Y + 16 + i * 22);
         const gtxt = t("pop_gain", { name: kindName(it.id), n: gained });
@@ -1829,6 +1922,7 @@
     if (spawnTimer <= 0) {
       if (items.length < maxItems()) spawnRandom();
       if (fever && items.length < maxItems()) spawnRandom();   // 冲刺时鱼群加倍涌入
+      if (superRun && items.length < maxItems()) spawnRandom(); // 秘境里再加一档
       // 海面越宽，出鱼越密，密度才和标准宽度一致
       spawnTimer = (fever ? grand(0.22, 0.45) : grand(0.45, 0.9)) / widthScale();
     }
@@ -1986,6 +2080,18 @@
         g.beginPath(); g.moveTo(10, -12); g.lineTo(46, -78); g.stroke();
         g.restore();
       }
+    } else if (kind === "gold") {
+      for (let i = 0; i < n * 2; i++) {                        // 堆成小山的金币
+        const x = ((i * 149) % (W - 40)) + 20, y = fy(x);
+        g.fillStyle = i % 3 ? "#ffd24a" : "#f0b429";
+        for (let c = 0; c < 5; c++) {
+          g.beginPath();
+          g.ellipse(x + (c - 2) * 7, y - (c % 3) * 5 - 3, 7, 3.4, 0, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
+      g.fillStyle = "rgba(255,231,150,.22)";                   // 一层金光
+      g.fillRect(0, FLOOR_Y - 60, W, H - FLOOR_Y + 60);
     } else if (kind === "ice") {
       g.fillStyle = "rgba(214,240,252,.5)";
       for (let i = 0; i < n; i++) {                            // 水面浮冰
@@ -2153,6 +2259,32 @@
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "#14212a";
     ctx.beginPath(); ctx.arc(x + r * 0.3 * look, y, Math.max(1.2, r * 0.45), 0, Math.PI * 2); ctx.fill();
+  }
+
+  function artShard(it) {                                // 地图碎片：撕破的羊皮纸
+    const R = 21, tear = (shards % SHARD_MAX);           // 手上第几片，缺口就朝哪边
+    ctx.save();
+    ctx.rotate(Math.sin(it.wob * 0.6) * 0.18);
+    ctx.fillStyle = "#f4dfa8";
+    ctx.beginPath();                                     // 一圈锯齿边，像撕出来的
+    for (let i = 0; i < 12; i++) {
+      const a = i / 12 * Math.PI * 2;
+      const jag = (i + tear) % 3 === 0 ? 0.74 : 1;
+      ctx[i ? "lineTo" : "moveTo"](Math.cos(a) * R * jag, Math.sin(a) * R * jag * 0.92);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "rgba(120,86,32,.55)"; ctx.lineWidth = 1.4;
+    ctx.beginPath();                                     // 图上的航线和 X
+    ctx.moveTo(-11, 5); ctx.quadraticCurveTo(-2, -6, 8, 2); ctx.stroke();
+    ctx.strokeStyle = "#b4451f"; ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(5, -2); ctx.lineTo(12, 6); ctx.moveTo(12, -2); ctx.lineTo(5, 6);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(120,86,32,.4)";                // 几个小点当地名
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath(); ctx.arc(-9 + i * 5, -7 + (i % 2) * 4, 1.5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
   }
 
   function artStarfish(it) {                             // 海星：五角，表面一层小疣
@@ -2771,7 +2903,7 @@
     }
   }
 
-  const ART = { shark:artShark, whale:artWhale, manta:artManta, lobster:artLobster,
+  const ART = { shard:artShard, shark:artShark, whale:artWhale, manta:artManta, lobster:artLobster,
                 seahorse:artSeahorse, starfish:artStarfish, ink:artInk, magnet:artMagnet, bighook:artBighook, watch:artWatch, turbo:artTurbo,
                 boot:artBoot, mine:artMine, fish:artFish, sword:artSword, angler:artAngler, boss:artBoss, squid:artSquid,
                 turtle:artTurtle, jelly:artJelly, puffer:artPuffer, crab:artCrab,
@@ -2809,7 +2941,7 @@
     ctx.translate(it.x, it.y);
     // 水母、金币、宝箱没有朝向；其它按游动方向翻转
     if (!["jelly", "coin", "chest", "mine", "boot", "magnet", "bighook", "watch", "turbo", "ink",
-          "starfish", "seahorse"].includes(it.kind.art)) ctx.scale(it.vx >= 0 ? 1 : -1, 1);
+          "starfish", "seahorse", "shard"].includes(it.kind.art)) ctx.scale(it.vx >= 0 ? 1 : -1, 1);
     ART[it.kind.art](it);
     ctx.restore();
     if (it.stun > 0) {                                 // 被震晕的小星星
@@ -2931,12 +3063,20 @@
       }
       ctx.textAlign = "left";
       let hy = SEA_Y + 28;
-      if (fever) {
+      if (fever && !superRun) {                  // SUPER FEVER 自己有一行，别再重复报 FEVER
         ctx.font = "900 22px 'Segoe UI','PingFang SC',sans-serif";
         ctx.lineWidth = 5; ctx.strokeStyle = "rgba(0,0,0,.55)";
         ctx.strokeText(t("hud_fever"), 14, hy);
         ctx.fillStyle = `rgba(255,196,90,${0.85 + Math.sin(waveT * 7) * 0.15})`;
         ctx.fillText(t("hud_fever"), 14, hy);
+        hy += 26;
+      }
+      if (superRun) {
+        ctx.font = "900 18px 'Segoe UI','PingFang SC',sans-serif";
+        ctx.lineWidth = 4.5; ctx.strokeStyle = "rgba(0,0,0,.6)";
+        ctx.strokeText(t("hud_super"), 14, hy);
+        ctx.fillStyle = `rgba(255,231,140,${0.85 + Math.sin(waveT * 9) * 0.15})`;
+        ctx.fillText(t("hud_super"), 14, hy);
         hy += 26;
       }
       if (coop && online) {
@@ -3060,12 +3200,22 @@
               sea:["#1a7d9e","#0f5573","#031d30"],
               mul:{ coin:2.4, boot:2.2, mine:2, magnet:1.6, watch:1.6, bighook:1.6, turbo:1.6,
                     lobster:1.6, crab:1.5, whale:0.4, boss:0.6 } },
+    /* 只有 SUPER FEVER 关卡会去的地方：w:0 所以永远抽不到。
+       `add` 是加法项 —— 宝箱和巨兽平时靠专门的计时器投放（基础权重 0），
+       乘法怎么乘都还是 0，只能加。 */
+    vault:  { zh:"宝藏秘境", en:"Treasure Vault", w:0, floor:"gold",
+              sea:["#2f7f6a","#1c6b52","#07301f"],
+              add:{ chest:14, boss:4 },
+              mul:{ coin:3, shard:0, mine:0, boot:0, ink:0,
+                    king:3, angler:3, whale:3, sword:2.5, manta:2.5, shark:2.5, squid:2,
+                    turtle:2, big:2, lobster:2, puffer:1.5,
+                    clown:0.3, small:0.3, starfish:0.3, seahorse:0.3, jelly:0.5 } },
     polar:  { zh:"极地海",   en:"Polar Sea",    w:16, floor:"ice",
               sea:["#5fbfe0","#2e86ad","#062a44"],
               mul:{ whale:3.2, big:1.8, manta:1.4, sword:1.4, shark:1.3,
                     clown:0.2, seahorse:0.2, crab:0.4, lobster:0.4, jelly:0.6 } },
   };
-  const MAP_IDS = Object.keys(MAPS);
+  const MAP_IDS = Object.keys(MAPS).filter(k => MAPS[k].w > 0);
   let gmap = "open";
   const mapName = id => (lang === "en" && MAPS[id].en) ? MAPS[id].en : MAPS[id].zh;
 
@@ -3452,6 +3602,7 @@
     refreshDaily();                                // 每日挑战说明也要换语言
     renderDex();                                   // 图鉴里的鱼名
     renderRanks(el.menuRank);                      // 排行榜表头
+    renderShards();
     if (el.yard.style.display !== "none") renderYard();
     if (!el.over.classList.contains("hidden") && repaintResults) repaintResults();
   }
@@ -3542,6 +3693,7 @@
   };
 
   function requestStart() {
+    superRun = false;                              // 「再钓一次」回到普通局，不会白送一次关卡
     if (online) NET.send({ t:"ready", dur: roundTime, coop: el.mpCoop.checked });   // 联机：谁先点谁定时长 + 模式
     else startGame();
   }
@@ -3554,7 +3706,9 @@
   });
   el.menu.addEventListener("click", startGame);
   el.over.addEventListener("click", requestStart);
-  document.getElementById("btn-start").addEventListener("click", e => { e.stopPropagation(); startGame(); });
+  document.getElementById("btn-start").addEventListener("click", e => {
+    e.stopPropagation(); superRun = false; startGame();          // 普通开钓：确保不是关卡
+  });
   document.getElementById("btn-again").addEventListener("click", e => { e.stopPropagation(); requestStart(); });
 
   // ── 局时选择 ──
@@ -3752,6 +3906,34 @@
 
   /* 造船厂面板。每次开关 / 买完 / 切语言都整块重画 —— 这点 DOM 很便宜，
      比零散地改 textContent 更不容易漏掉某处。 */
+  function renderShards() {
+    el.shardPips.innerHTML = "";
+    for (let i = 0; i < SHARD_MAX; i++) {
+      const p = document.createElement("i");
+      if (i < shards) p.className = "on";
+      el.shardPips.appendChild(p);
+    }
+    const ready = shards >= SHARD_MAX;
+    el.shardNote.textContent = ready ? t("shard_ready") : t("shard_note", { n: shards, max: SHARD_MAX });
+    el.superBtn.style.display = ready ? "" : "none";
+  }
+
+  /* SUPER FEVER 关卡：花掉集齐的 5 片图，换 45 秒的宝藏秘境。
+     全程 FEVER（×1.5）再乘 SUPER_MULT，等于 ×3；没有水雷破靴子；宝箱和巨兽成堆。
+     碎片在开局那一刻就扣掉 —— 中途刷新页面不该把这一关白送回来。 */
+  function startSuper() {
+    if (shards < SHARD_MAX) return;
+    shards = 0; saveShards(); renderShards();
+    superRun = true;
+    daily = false; refreshDaily();                 // 关掉每日挑战，按钮状态也要跟着还原
+    startGame();
+    pop(W / 2, SEA_Y + 120, t("super_go"), "#ffd24a", 30);
+    pop(W / 2, SEA_Y + 165, t("super_sub"), "#fff3c4", 19);
+    fanfare();
+    [880, 1046, 1318, 1568].forEach((f, i) => setTimeout(() => beep(f, 0.18, "square", 0.05), i * 110));
+  }
+  el.superBtn.addEventListener("click", e => { e.stopPropagation(); startSuper(); });
+
   function renderYard() {
     el.yardCoins.textContent = boat.coins;
     el.yardList.innerHTML = "";
@@ -4053,6 +4235,7 @@
   refreshDaily();
   renderDurSeg();
   resetGame();                       // 菜单背景也有鱼在游
+  renderShards();
   initLock();                        // 放最后：锁屏要用到 el / t() / bgm
   requestAnimationFrame(loop);
 })();
