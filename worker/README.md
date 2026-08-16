@@ -113,12 +113,14 @@ Durable Objects 在 Cloudflare 免费方案上可用（`wrangler.toml` 里用的
 | C→S | `grab {id,x,y}` | 我钩到了这条鱼 —— **先到先得，服务器仲裁**；`x,y` 是爆点 |
 | C→S | `miss` | 空钩，连击清零 |
 | C→S | `emote {e}` | 发快捷表情（0~3），服务器按人 700ms 限一次 |
+| C→S | `ram {id}` | 撞对面那条船；服务器只卡冷却（撞的人 4.5s、挨撞的人 2s 无敌）|
 | S→C | `welcome / joined / left` | 房间状态、谁进谁出 |
 | S→C | `start / tick / over` | 开局、每秒的时间与 FEVER、结算排行 |
 | S→C | `spawn {items} / despawn {ids}` | 出鱼（带 `x,y,vx,life`）、消失 |
 | S→C | `grabbed {id,by,kind,gained,score,combo,bonus,x,y,time}` | 这条鱼归谁、分数与时间奖励 |
 | S→C | `hooks {id:[x,y,st,n]}` | 所有人的钩子位置 |
 | S→C | `emote {by,e}` | 谁发了什么表情 |
+| S→C | `rammed {by,to}` | 谁撞了谁（效果全在客户端算）|
 
 鱼的移动**不走网络**：出生时把 `x / y / vx / life` 发一次，两边各自按同样的参数推进，
 所以没有每帧同步、也不会抖。真正需要仲裁的只有「这条鱼归谁」。
@@ -133,3 +135,8 @@ Durable Objects 在 Cloudflare 免费方案上可用（`wrangler.toml` 里用的
 
 **墨囊**（`ink`）只在联机的鱼表里有权重：谁钓到它，其他客户端收到 `grabbed` 时看见
 `kind === "ink"` 且 `by` 不是自己，就把自己的画面糊上墨。服务器不需要为它做任何特殊处理。
+
+**撞船**（`ram`）同理：拽偏钩子、收线变慢这些效果全在客户端算，服务器只确认「谁撞了谁」
+并卡两道冷却 —— 它不碰分数，所以不需要仲裁；效果对称，所以两边算出来一样。
+**缠线**连服务器都不用过：两根线离得太近就一起变慢并互相顶开，双方各自用同一份钩子位置
+（10Hz 同步 + 插值）判定。

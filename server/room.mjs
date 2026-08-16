@@ -35,6 +35,9 @@ export const MAP_MUL = {
 };
 const MAX_ITEMS = 26;
 const MAX_CHAIN = 8;
+// 撞船：客户端自己也有一份冷却（略长），这里是防改客户端的那道
+export const RAM_CD     = 4.5;    // 同一个人隔多久才能再撞
+export const RAM_IMMUNE = 2;      // 同一个人挨完撞的无敌时间，免得被围殴
 
 // 场地常量必须和客户端一致
 const W = 600, SEA_Y = 210, FLOOR_Y = 946, TOP = 250, SPAN = 666;
@@ -182,6 +185,22 @@ export class Room {
         p.lastEmote = now;
         const e = Math.max(0, Math.min(5, +msg.e || 0));
         this.broadcast({ t: "emote", by: id, e });
+        break;
+      }
+
+      /* 撞船：效果全在客户端（拽偏钩子 + 收线变慢，不碰分数），
+         服务器只做两件事 —— 确认「谁撞了谁」，以及卡住连撞。
+         冷却分两头算：撞的人别刷屏，挨撞的人也别被一屋子人围着轮。 */
+      case "ram": {
+        if (this.state !== "playing" || p.spec) return;
+        const tgt = this.players.get(+msg.id);
+        if (!tgt || tgt.id === id || tgt.spec) return;
+        const now = Date.now();
+        if (now - (p.lastRam || 0) < RAM_CD * 1000) return;
+        if (now - (tgt.lastRammed || 0) < RAM_IMMUNE * 1000) return;
+        p.lastRam = now;
+        tgt.lastRammed = now;
+        this.broadcast({ t: "rammed", by: id, to: tgt.id });
         break;
       }
 

@@ -402,6 +402,7 @@
         <label class="mp-check"><input type="checkbox" id="mp-spec"><span data-i18n="spec_label">观战模式（只看不钓）</span></label>
         <label class="mp-check"><input type="checkbox" id="mp-coop"><span data-i18n="coop_label">合作模式（全队共用目标分）</span></label>
         <div class="mp-note" id="mp-note" data-i18n="mp_note"></div>
+        <div class="mp-note" data-i18n="ram_tip" style="opacity:.8"></div>
       </div>
     </div>
 
@@ -579,6 +580,15 @@
       coop_label:"合作模式（全队共用目标分）", coop_hud:"全队 {team} / {target}",
       coop_win:"🎉 达成目标！全队 {team} / {target}", coop_lose:"差一点…全队 {team} / {target}",
       ink_hit:"被泼了墨！", ink_use:"墨囊！糊他们一脸", emote_tip:"按 1~4 发表情",
+      ram_tip:"想使坏：点对手的船（或按 R）撞过去 —— 自己得先把线收上来。两根线靠太近还会缠住，双方都被拖慢。",
+      ram_hit:"💥 被撞了！船还在晃",
+      ram_did:"💥 撞开了 {name}！",
+      ram_cd:"撞船还要等 {n} 秒",
+      ram_busy:"先把线收上来才好撞人",
+      ram_far:"太远了，等船开过去",
+      ram_dazed:"船还在晃，抛不出去…",
+      ram_none:"旁边没有能撞的船",
+      tangle:"🪢 两根线缠住了！",
       sc_day:"☀️ 晴天", sc_dusk:"🌇 黄昏", sc_night:"🌙 夜钓　只有会发光的看得清", sc_storm:"⛈️ 暴风雨　船摇得厉害",
       pop_stolen:"被抢走了！", pop_won:"抢到了！", pop_boss_spawn:"深海巨兽出现！",
       pop_fever:"FEVER！得分 ×1.5", hud_fever:"FEVER ×1.5", hud_combo:"连击 ×{c}　得分 ×{m}",
@@ -668,6 +678,15 @@
       coop_label:"Co-op (shared team target)", coop_hud:"Team {team} / {target}",
       coop_win:"🎉 Target reached! Team {team} / {target}", coop_lose:"So close… Team {team} / {target}",
       ink_hit:"Inked!", ink_use:"Ink! Right in their faces", emote_tip:"Keys 1-4 send an emote",
+      ram_tip:"Play dirty: tap a rival's boat (or press R) to ram it — your own line has to be up first. Lines that drift too close tangle, and that slows both of you.",
+      ram_hit:"💥 Rammed! Your boat is still rocking",
+      ram_did:"💥 You shoved {name}!",
+      ram_cd:"Ram ready in {n}s",
+      ram_busy:"Reel your line in before you ram",
+      ram_far:"Too far — wait for your boat to drift over",
+      ram_dazed:"Still rocking — can't cast…",
+      ram_none:"No boat close enough to ram",
+      tangle:"🪢 Lines tangled!",
       sc_day:"☀️ Clear", sc_dusk:"🌇 Dusk", sc_night:"🌙 Night dive　only glowing things show", sc_storm:"⛈️ Storm　the boat is rocking",
       pop_stolen:"Snatched away!", pop_won:"Got it first!", pop_boss_spawn:"A deep-sea beast appears!",
       pop_fever:"FEVER! Score ×1.5", hud_fever:"FEVER ×1.5", hud_combo:"Combo ×{c}　Score ×{m}",
@@ -862,6 +881,9 @@
   let fever = false;                               // 最后冲刺：进入后得分 ×1.5、刷新加快、不再加时
   const FEVER_MULT = 1.5;
   const ship = { x:W/2, tipX:W/2, tipY:SEA_Y - 60 };
+  let shipHome = W / 2;                            // 船本来该在的位置（正弦航线上）
+  const shipPhase = () => (online && NET.you ? (NET.you % 6) * 1.05 : 0);
+  let shipOff  = 0;                                // 撞人 / 被撞时相对航线的偏移
 
   const el = {
     score: document.getElementById("hud-score"),
@@ -1061,6 +1083,7 @@
     { id:"chest3",  zh:"一局钓 3 个宝箱",     en:"3 chests in one round",     test:r => (r.caught.chest || 0) >= 3 },
     { id:"fatshark",zh:"钓上一条吃饱的鲨鱼",   en:"Land a well-fed shark",     test:r => (r.sharkMeals || 0) >= 4 },
     { id:"mpwin",   zh:"联机拿第一",         en:"Win an online round",       test:r => r.mpRank === 1 && r.mpPlayers > 1 },
+    { id:"rammer",  zh:"一局撞开对手 3 次",   en:"Ram rivals three times",    test:r => (r.rams || 0) >= 3 },
     { id:"daily5",  zh:"完成 5 次每日挑战",   en:"5 daily challenges",        test:r => dailyRec.plays >= 5 },
   ];
   let achv = new Set();
@@ -1340,7 +1363,8 @@
     inkT = 0; inkBlobs.length = 0; emotes.clear();
     powersSeen.clear();
     roundStat = { maxChain:0, maxCombo:0, powersUsed:0, score:0, mineHits:0, scene, caught:{},
-                  mpRank:0, mpPlayers:0, sharkMeals:0 };
+                  mpRank:0, mpPlayers:0, sharkMeals:0, rams:0 };
+    ramCd = 0; dazed = 0; tangleT = 0; ramCharge = null; shipOff = 0;
     rollMissions();
     if (superRun) {                                // 秘境：固定 45 秒、固定地图、全程 FEVER
       timeLeft = SUPER_TIME;
@@ -1478,7 +1502,7 @@
 
   // 这一局的统计，成就判定只看它
   let roundStat = { maxChain:0, maxCombo:0, powersUsed:0, score:0, mineHits:0, scene:"day", caught:{},
-                    mpRank:0, mpPlayers:0, sharkMeals:0 };
+                    mpRank:0, mpPlayers:0, sharkMeals:0, rams:0 };
   const powersSeen = new Set();
 
   function paintAchvLine() {
@@ -1557,6 +1581,11 @@
     if (state !== "playing" || spectating) return;   // 观众没有钩子
     if (hook.state === "down") { reel(); return; }  // 下沉途中再点一下 = 立刻收线
     if (hook.state !== "idle") return;
+    if (dazed > 0) {                                 // 刚被撞：船还在晃，这一竿抛不出去
+      pop(ship.x, SEA_Y - 40, t("ram_dazed"), "#ff9f6b", 18);
+      beep(180, 0.12, "square", 0.03);
+      return;
+    }
     hook.x = clamp(x, 20, W - 20);
     hook.y = SEA_Y;
     hook.state = "down";
@@ -1913,7 +1942,11 @@
     if (inkT > 0) inkT = Math.max(0, inkT - dt);
     bob = Math.sin(waveT * 1.5) * 5 * ((SCENES[scene] || SCENES.day).bob || 1);
 
-    ship.x    = W / 2 + Math.sin(waveT * 0.3) * (W * 0.24);
+    /* 每个人的船按自己的相位在海面上来回开：不给相位差的话，一屋子人用同一条
+       正弦航线，船会全叠在一起 —— 撞船就成了「随便点都撞得到」，也看不清谁是谁。 */
+    shipHome  = W / 2 + Math.sin(waveT * 0.3 + shipPhase()) * (W * 0.24);
+    stepRam(dt);                                   // 冲撞的位移在这里算，船身位置要用
+    ship.x    = shipHome + shipOff;
     ship.tipX = ship.x + 62;
     ship.tipY = SEA_Y - 96 + bob;
     if (hook.state === "idle") { hook.x = ship.tipX; hook.y = SEA_Y + 8; }
@@ -1942,6 +1975,7 @@
       timeLeft = Math.max(0, timeLeft - dt);        // 两次 tick 之间自己走，读数才不卡
       netHookReport(dt);
       netLerpHooks(dt);
+      stepTangle(dt);
       moveHook(dt);
       syncHud();
       return;
@@ -1993,7 +2027,7 @@
 
   function moveHook(dt) {
     if (hook.state === "down") {
-      hook.y += 470 * dt;
+      hook.y += 470 * dazeMul() * dt;
       // 下沉不咬钩：像真机台一样沉到底（或玩家点第二下的深度）再往上收，
       // 收线途中把碰到的全部串走 —— 这样「选哪一竖排」才是真决策
       if (hook.y >= FLOOR_Y - 10) {
@@ -2001,7 +2035,7 @@
         reel();
       }
     } else if (hook.state === "up") {
-      hook.y -= hook.pull * stepStruggle(dt) * dt;
+      hook.y -= hook.pull * stepStruggle(dt) * dazeMul() * dt;
       tryHook();                                   // 收线途中撞到的一起串上来
       layChain();
       if (hook.y <= SEA_Y) { hook.y = SEA_Y; land(); }
@@ -3273,6 +3307,125 @@
   const EMOJI = ["👍", "😂", "🎣", "😱"];
   let coop = false, coopTeam = 0, coopTarget = 0;
 
+  /* ─────────── 撞船和缠线：船与船之间互相使坏 ───────────
+     鱼是先钩到先得，所以「干扰」真正管用的地方就两个：钩子在哪、收线多快。
+       撞船  主动。点对手的船，自己的船冲过去撞一下 —— 对方的钩子被拽偏、
+             收线变慢一秒，正在拉扯的大货也会脱力。代价是自己得先收线（撞人
+             的时候你没在钓鱼），外加冷却，所以是「放弃一竿去坏他一竿」。
+       缠线  被动。两根线离得太近就会缠上，双方一起变慢，同时互相顶开 ——
+             不用按键，也不会永远卡死。
+     判定放在客户端：两边看到的钩子位置是同一份（10Hz 同步 + 插值），效果对称，
+     又不碰分数，所以不需要服务器仲裁。服务器只转发「谁撞了谁」并卡冷却。 */
+  const RAM_RANGE = 200;                            // 撞得到的横向距离
+  const RAM_CD    = 5;                              // 撞完要等多久
+  const RAM_DAZE  = 1.0;                            // 被撞后晃多久
+  const RAM_SHOVE = 72;                             // 钩子被拽偏多少
+  const TANGLE_X  = 34, TANGLE_Y = 64;              // 多近算缠上
+  let ramCd = 0, dazed = 0, tangleT = 0;
+  let ramCharge = null;                             // {t,dur,off,hit} 冲过去的那一下
+  let ramTold = false;                              // 玩法提示只说一次
+
+  const dazeMul = () => (dazed > 0 ? 0.4 : 1) * (tangleT > 0 ? 0.55 : 1);
+
+  function stepRam(dt) {
+    ramCd  = Math.max(0, ramCd - dt);
+    dazed  = Math.max(0, dazed - dt);
+    tangleT = Math.max(0, tangleT - dt);
+    if (ramCharge) {
+      ramCharge.t += dt;
+      if (!ramCharge.hit && ramCharge.t >= ramCharge.dur * 0.45) {   // 撞上的那一瞬
+        ramCharge.hit = true;
+        if (ramCharge.fx) {
+          splash(shipHome + ramCharge.off, SEA_Y, 20, "#ffd9a6");
+          shakeT = Math.max(shakeT, 0.26);
+          beep(120, 0.22, "sawtooth", 0.06);
+          setTimeout(() => beep(90, 0.16, "square", 0.05), 60);
+        }
+      }
+      if (ramCharge.t >= ramCharge.dur) ramCharge = null;
+    }
+    // sin 曲线：冲出去再自己荡回来，不用额外记回程
+    const want = ramCharge
+      ? ramCharge.off * Math.sin(Math.min(1, ramCharge.t / ramCharge.dur) * Math.PI)
+      : 0;
+    shipOff += (want - shipOff) * Math.min(1, dt * 14);
+  }
+
+  const ramReady = () => online && !spectating && state === "playing" &&
+                         ramCd <= 0 && dazed <= 0 && hook.state === "idle";
+  const inRamRange = h => Math.abs(h.rx - shipHome) <= RAM_RANGE;
+
+  function ramTargetAt(x, y) {                      // 这一下点在谁的船上？
+    if (!online || spectating) return null;
+    if (y > SEA_Y + 8 || y < SEA_Y - 48) return null;   // 只认水面上那一条
+    let best = null, bd = 36;
+    for (const [id, h] of NET.hooks) {
+      if (!NET.players.has(id)) continue;           // 观众没有船
+      const d = Math.abs(h.rx - x);
+      if (d < bd) { bd = d; best = id; }
+    }
+    return best;
+  }
+
+  function nearestRam() {                           // 键盘用：撞最近的那条
+    let best = null, bd = Infinity;
+    for (const [id, h] of NET.hooks) {
+      if (!NET.players.has(id)) continue;
+      const d = Math.abs(h.rx - shipHome);
+      if (d < bd) { bd = d; best = id; }
+    }
+    return best;
+  }
+
+  function tryRam(id) {
+    if (!online || spectating || state !== "playing") return;
+    const h = NET.hooks.get(id);
+    if (!h || !NET.players.has(id)) { pop(ship.x, SEA_Y - 40, t("ram_none"), "#a8c8da", 18); return; }
+    if (dazed > 0)  { pop(ship.x, SEA_Y - 40, t("ram_dazed"), "#ff9f6b", 18); return; }
+    if (ramCd > 0)  { pop(ship.x, SEA_Y - 40, t("ram_cd", { n: Math.ceil(ramCd) }), "#a8c8da", 18); return; }
+    if (hook.state !== "idle") { pop(ship.x, SEA_Y - 40, t("ram_busy"), "#a8c8da", 18); return; }
+    if (!inRamRange(h)) { pop(ship.x, SEA_Y - 40, t("ram_far"), "#a8c8da", 18); return; }
+    ramCd = RAM_CD;
+    ramCharge = { t:0, dur:0.5, off: clamp(h.rx - shipHome, -RAM_RANGE, RAM_RANGE), hit:false, fx:true };
+    NET.send({ t:"ram", id });
+  }
+
+  /* 挨撞：钩子被拽向一边（本来瞄着的那条鱼就跑了），收线变慢一秒。
+     分数不动 —— 已经上钩的照样算他的，干扰的是「下一条抢不抢得到」。 */
+  function ramHit(byId) {
+    const h = NET.hooks.get(byId);
+    const from = h ? h.rx : ship.x;
+    const dir  = hook.x >= from ? 1 : -1;
+    dazed = RAM_DAZE;
+    if (hook.state !== "idle") hook.x = clamp(hook.x + dir * RAM_SHOVE, 20, W - 20);
+    if (struggle) struggle.stall = Math.max(struggle.stall, 0.6);
+    ramCharge = { t:0, dur:0.55, off: dir * 40, hit:true, fx:false };   // 自己也被顶开
+    shakeT = Math.max(shakeT, 0.36);
+    pop(ship.x, SEA_Y + 70, t("ram_hit"), "#ff9f6b", 22);
+    beep(110, 0.26, "sawtooth", 0.06);
+    if (navigator.vibrate) try { navigator.vibrate(110); } catch (_) {}
+  }
+
+  /* 缠线：两根线靠太近就一起变慢，并且互相顶开 ——
+     位置正好重合时按 id 大小分左右，否则两边会朝同一个方向推、永远分不开。 */
+  function stepTangle(dt) {
+    if (!online || spectating || hook.state === "idle") return;
+    for (const [id, h] of NET.hooks) {
+      if (!NET.players.has(id) || h.st === "idle") continue;
+      const dx = hook.x - h.rx, dy = hook.y - h.ry;
+      if (Math.abs(dx) >= TANGLE_X || Math.abs(dy) >= TANGLE_Y) continue;
+      const first = tangleT <= 0;
+      tangleT = 0.4;
+      const dir = Math.abs(dx) > 2 ? Math.sign(dx) : (NET.you > id ? 1 : -1);
+      hook.x = clamp(hook.x + dir * 95 * dt, 20, W - 20);
+      if (first) {
+        pop(hook.x, hook.y - 40, t("tangle"), "#ffd24a", 19);
+        beep(240, 0.1, "square", 0.035);
+      }
+      break;
+    }
+  }
+
   let struggle = null;
   let shakeT = 0;                                   // 画面震动剩余时间
   let hookReportT = 0;
@@ -3349,6 +3502,11 @@
     hook = { state:"idle", x:W/2, y:SEA_Y, catches:[], pull:0 };
     struggle = null;
     combo = 0; score = 0; caught = {}; earned = {}; newSeen = [];
+    ramCd = 0; dazed = 0; tangleT = 0; ramCharge = null; shipOff = 0;
+    // 成就只看这一局：联机连打几局也要各算各的
+    roundStat = { maxChain:0, maxCombo:0, powersUsed:0, score:0, mineHits:0, scene, caught:{},
+                  mpRank:0, mpPlayers:0, sharkMeals:0, rams:0 };
+    mineHits = 0; powersSeen.clear();
     el.menu.classList.add("hidden");
     el.over.classList.add("hidden");
   }
@@ -3401,6 +3559,7 @@
         // 联机的地图和天色都由服务器统一下发，一屋子人同一片海
         if (m.map) gmap = MAPS[m.map] ? m.map : "open";
         if (m.scene) { setScene(m.scene); announceScene(); }
+        if (!ramTold) { ramTold = true; setTimeout(() => pop(W / 2, SEA_Y + 150, t("ram_tip"), "#9be7ff", 16), 1600); }
         coop = !!m.coop; coopTarget = m.target || 0; coopTeam = 0;
         el.stage.classList.remove("fever");
         NET.players = new Map((m.players || []).map(p => [p.id, p]));
@@ -3468,6 +3627,18 @@
         emotes.set(m.by, { e: m.e, t: performance.now() / 1000 });
         break;
 
+      case "rammed":                                // 服务器确认了一次撞船
+        if (m.to === NET.you && !spectating) ramHit(m.by);
+        else if (m.by === NET.you) {                // 撞中了才记数（服务器可能因冷却驳回）
+          roundStat.rams = (roundStat.rams || 0) + 1;
+          const who = NET.players.get(m.to);
+          pop(ship.x, SEA_Y - 60, t("ram_did", { name: who ? who.name : "?" }), "#ffd24a", 20);
+        } else {                                    // 旁观别人互撞，也给点动静
+          const h = NET.hooks.get(m.to);
+          if (h) { splash(h.rx, SEA_Y, 14, "#ffd9a6"); beep(130, 0.16, "sawtooth", 0.04); }
+        }
+        break;
+
       case "hooks":
         for (const [idStr, v] of Object.entries(m.h || {})) {
           const id = +idStr;
@@ -3502,6 +3673,7 @@
       case "over":
         state = "over";
         struggle = null;
+        dazed = 0; tangleT = 0; ramCharge = null; shipOff = 0;
         showPane("sum");
         NET.players = new Map((m.players || []).map(p => [p.id, p]));
         showOnlineResults(m.players || []);
@@ -3574,9 +3746,11 @@
 
   // 联机时画别人的船、鱼线和钩子，右上角一块实时比分
   function drawRemotes() {
+    const canRam = ramReady();
     for (const [id, h] of NET.hooks) {
+      const p = NET.players.get(id);
+      if (!p) continue;                              // 观众没有船，别画一条幽灵船
       const col = pColor(id);
-      const p   = NET.players.get(id);
       ctx.strokeStyle = col; ctx.globalAlpha = 0.75; ctx.lineWidth = 1.4;
       ctx.beginPath(); ctx.moveTo(h.rx, SEA_Y - 12); ctx.lineTo(h.rx, h.ry); ctx.stroke();
       ctx.globalAlpha = 1;
@@ -3586,7 +3760,7 @@
       ctx.lineTo(h.rx + 9, SEA_Y - 6); ctx.lineTo(h.rx - 9, SEA_Y - 6);
       ctx.closePath(); ctx.fill();
       ctx.beginPath(); ctx.arc(h.rx, h.ry, 4, 0, Math.PI * 2); ctx.fill();
-      if (p) {                                       // 名字牌
+      {                                              // 名字牌
         ctx.font = "700 12px 'Segoe UI','PingFang SC',sans-serif";
         ctx.textAlign = "center";
         const w = ctx.measureText(p.name).width + 10;
@@ -3594,6 +3768,27 @@
         pill(h.rx - w / 2, SEA_Y - 34, w, 15, 5); ctx.fill();
         ctx.fillStyle = col;
         ctx.fillText(p.name, h.rx, SEA_Y - 23);
+      }
+      // 撞得到的时候，船头上冒个记号 —— 玩家不用记规则，看得见才知道现在能撞
+      if (canRam && inRamRange(h)) {
+        ctx.font = "16px 'Segoe UI Emoji','Apple Color Emoji',sans-serif";
+        ctx.textAlign = "center";
+        ctx.globalAlpha = 0.65 + Math.sin(waveT * 6) * 0.3;
+        ctx.fillText("💥", h.rx, SEA_Y - 40);
+        ctx.globalAlpha = 1;
+      }
+      // 线缠一块儿了：在交叉处打个结
+      if (tangleT > 0 && hook.state !== "idle" && h.st !== "idle" &&
+          Math.abs(hook.x - h.rx) < TANGLE_X + 40 && Math.abs(hook.y - h.ry) < TANGLE_Y + 30) {
+        const mx = (hook.x + h.rx) / 2, my = (hook.y + h.ry) / 2;
+        ctx.strokeStyle = "#ffd24a"; ctx.lineWidth = 2.2; ctx.lineJoin = "round";
+        ctx.beginPath();
+        for (let i = 0; i <= 10; i++) {                // 慢慢转的结，一眼看出是缠住了
+          const a = i / 10 * Math.PI * 2 + waveT * 2, r = i % 2 ? 4.5 : 11;
+          const fx = mx + Math.cos(a) * r, fy = my + Math.sin(a) * r;
+          i ? ctx.lineTo(fx, fy) : ctx.moveTo(fx, fy);
+        }
+        ctx.closePath(); ctx.stroke();
       }
     }
     if (NET.players.size) {                          // 实时比分板
@@ -3734,6 +3929,10 @@
     const r = canvas.getBoundingClientRect();
     return (clientX - r.left) * (W / r.width);
   };
+  const canvasY = clientY => {
+    const r = canvas.getBoundingClientRect();
+    return (clientY - r.top) * (H / r.height);
+  };
 
   function requestStart() {
     superRun = false;                              // 「再钓一次」回到普通局，不会白送一次关卡
@@ -3745,7 +3944,13 @@
     if (locked) return;
     e.preventDefault();
     if (state === "playing" && struggle) { tapStruggle(); return; }   // 正在拉扯
-    state === "playing" ? cast(canvasX(e.clientX)) : requestStart();
+    if (state !== "playing") { requestStart(); return; }
+    const x = canvasX(e.clientX);
+    // 点在水面上别人的船上 = 撞他一下；点海里还是下钩（下钩只看横坐标，
+    // 所以被让出去的只有水面那一条窄带，同一个 x 往下点一点照样能抛）
+    const who = ramTargetAt(x, canvasY(e.clientY));
+    if (who != null) { tryRam(who); return; }
+    cast(x);
   });
   el.menu.addEventListener("click", startGame);
   el.over.addEventListener("click", requestStart);
@@ -4231,6 +4436,14 @@
     if (online && e.key >= "1" && e.key <= "4") {     // 1~4 发快捷表情
       if (document.activeElement && document.activeElement.tagName === "INPUT") return;
       sendEmote(+e.key - 1);
+      return;
+    }
+    if (online && (e.key === "r" || e.key === "R")) { // R 撞最近的那条船
+      if (document.activeElement && document.activeElement.tagName === "INPUT") return;
+      e.preventDefault();
+      const who = nearestRam();
+      if (who == null) pop(ship.x, SEA_Y - 40, t("ram_none"), "#a8c8da", 18);
+      else tryRam(who);
       return;
     }
     if (e.code !== "Space" && e.code !== "Enter") return;
