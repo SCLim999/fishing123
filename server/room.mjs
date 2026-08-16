@@ -150,7 +150,7 @@ export class Room {
   // ───────────────────────── 进出房间 ─────────────────────────
   join(id, name, spec = false) {
     const p = { id, name: (name || (spec ? "观众" : "船长")).slice(0, 12), score: 0, combo: 0,
-                spec: !!spec, hook: { x: W / 2, y: SEA_Y, st: "idle", n: 0 } };
+                spec: !!spec, hook: { x: W / 2, y: SEA_Y, st: "idle", n: 0, s: W / 2 } };
     this.players.set(id, p);
     this.sendTo(id, { t: "welcome", you: id, state: this.state, time: Math.ceil(this.timeLeft),
                       fever: this.fever, dur: this.roundTime, scene: this.scene, map: this.map, spec: p.spec,
@@ -211,6 +211,8 @@ export class Room {
         h.y  = clamp(+msg.y || 0, 0, FLOOR_Y);
         h.st = msg.st === "down" || msg.st === "up" ? msg.st : "idle";
         h.n  = clamp(+msg.n || 0, 0, MAX_CHAIN);
+        // s = 船位。钩子的 x 是钓点，船另在一处，别人要两个都拿到才画得对
+        h.s  = Number.isFinite(+msg.s) ? clamp(+msg.s, 0, W) : h.x;
         this.hooksDirty = true;
         break;
       }
@@ -404,9 +406,13 @@ export class Room {
     this.flushSpawns();
     if (gone.length) this.broadcast({ t: "despawn", ids: gone });
 
-    if (this.hooksDirty) {                           // 别人的钩子，10Hz 广播
+    if (this.hooksDirty) {                           // 别人的钩子和船位，10Hz 广播
       const h = {};
-      for (const p of this.players.values()) h[p.id] = [Math.round(p.hook.x), Math.round(p.hook.y), p.hook.st, p.hook.n];
+      for (const p of this.players.values()) {
+        if (p.spec) continue;                        // 观众没有钩子也没有船，别占广播
+        h[p.id] = [Math.round(p.hook.x), Math.round(p.hook.y), p.hook.st, p.hook.n,
+                   Math.round(p.hook.s != null ? p.hook.s : p.hook.x)];
+      }
       this.broadcast({ t: "hooks", h });
       this.hooksDirty = false;
     }

@@ -109,7 +109,7 @@ Durable Objects 在 Cloudflare 免费方案上可用（`wrangler.toml` 里用的
 |---|---|---|
 | C→S | `join`（走 URL 参数）| 带房间码和昵称连上来 |
 | C→S | `ready {dur,coop}` | 请求开一局，顺便定局时和是否合作模式 |
-| C→S | `hook {x,y,st,n}` | 10Hz 上报自己的钩子，纯给别人看 |
+| C→S | `hook {x,y,st,n,s}` | 10Hz 上报自己的钩子和**船位 `s`**，纯给别人看 |
 | C→S | `grab {id,x,y}` | 我钩到了这条鱼 —— **先到先得，服务器仲裁**；`x,y` 是爆点 |
 | C→S | `miss` | 空钩，连击清零 |
 | C→S | `emote {e}` | 发快捷表情（0~3），服务器按人 700ms 限一次 |
@@ -118,7 +118,7 @@ Durable Objects 在 Cloudflare 免费方案上可用（`wrangler.toml` 里用的
 | S→C | `start / tick / over` | 开局、每秒的时间与 FEVER、结算排行 |
 | S→C | `spawn {items} / despawn {ids}` | 出鱼（带 `x,y,vx,life`）、消失 |
 | S→C | `grabbed {id,by,kind,gained,score,combo,bonus,x,y,time}` | 这条鱼归谁、分数与时间奖励 |
-| S→C | `hooks {id:[x,y,st,n]}` | 所有人的钩子位置 |
+| S→C | `hooks {id:[x,y,st,n,s]}` | 所有钓鱼的人的钩子和船位（观众不在里面）|
 | S→C | `emote {by,e}` | 谁发了什么表情 |
 | S→C | `rammed {by,to}` | 谁撞了谁（效果全在客户端算）|
 
