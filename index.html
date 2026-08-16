@@ -143,6 +143,23 @@
   .up button.maxed{background:linear-gradient(180deg,#8bf5a8,#3aa860);border-color:#1e6b3c;color:#04210f}
   .yard-note{font-size:.74rem;color:#8fb6cf;line-height:1.5}
 
+  /* 结算页那条「要不要升级」的提示 */
+  .upsell{
+    display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:center;
+    font-size:.8rem;color:#cfe6f2;
+  }
+  .upsell:empty{display:none}
+  .upsell.can{
+    background:rgba(255,210,74,.12);border:1px solid rgba(255,210,74,.45);
+    border-radius:10px;padding:7px 12px;
+  }
+  .upsell b{color:var(--gold)}
+  .upsell button{
+    background:linear-gradient(180deg,#ffe98a,#f0a81c);color:#3a2200;font-weight:900;
+    border:2px solid #8a5a00;border-radius:8px;padding:6px 12px;font-size:.8rem;
+    cursor:pointer;font-family:inherit;white-space:nowrap;
+  }
+
   /* 结算页的标签页 */
   .tabs{display:flex;gap:6px;margin:2px 0 4px}
   .tabs button{
@@ -394,6 +411,7 @@
       <div class="tabs" id="over-tabs">
         <button class="on" data-pane="sum" data-i18n="tab_sum">战果</button>
         <button data-pane="fish" data-i18n="tab_fish">钓到的鱼</button>
+        <button data-pane="yard" data-i18n="tab_yard">🛠 造船厂</button>
       </div>
       <div class="pane" id="pane-sum">
         <div class="price" id="over-players" style="display:none"></div>
@@ -401,12 +419,23 @@
         <p id="over-miss"></p>
         <p id="over-achv"></p>
         <p id="over-coins"></p>
+        <div class="upsell" id="over-upsell"></div>
         <p id="over-dex"></p>
         <p id="over-best"></p>
         <div class="rank" id="over-rank"></div>
       </div>
       <div class="pane hidden" id="pane-fish">
         <div class="fish-list" id="fish-list"></div>
+      </div>
+      <div class="pane hidden" id="pane-yard">
+        <div class="yard" style="display:flex">
+          <div class="yard-head">
+            <span data-i18n="yard_coins">金币</span> <b id="over-yard-coins">0</b>
+            <span style="opacity:.7" data-i18n="yard_rate"></span>
+          </div>
+          <div id="over-yard-list"></div>
+          <div class="yard-note" data-i18n="yard_note"></div>
+        </div>
       </div>
       <button class="share" id="btn-share" data-i18n="btn_share">复制 / 分享成绩</button>
       <button class="share" id="btn-card" data-i18n="btn_card">保存成绩图</button>
@@ -509,7 +538,11 @@
       yard_solo:"（仅单人）",
       coins_got:"这一局赚到 {n} 金　·　现有 {total} 金",
       yard_done:"{name} 升到 {lv} 级！",
-      tab_sum:"战果", tab_fish:"钓到的鱼",
+      tab_sum:"战果", tab_fish:"钓到的鱼", tab_yard:"🛠 造船厂",
+      up_can:"🛠 够钱升级了：<b>{name}</b> → {lv} 级（{n} 金）",
+      up_go:"去升级",
+      up_soon:"🛠 再攒 <b>{n}</b> 金就能升 {name} 了",
+      up_maxed:"🛠 五项都满级了 —— 这船没得再改了",
       fish_none:"这一局什么都没钓上来 —— 下一竿挑鱼多的那一竖排。",
       fish_count:"×{n}",
       lock_title:"已锁屏", lock_sub:"输入密码继续钓鱼", lock_ph:"密码", lock_btn:"解锁",
@@ -594,7 +627,11 @@
       yard_solo:"(solo only)",
       coins_got:"Earned {n} coins this round　·　{total} in the hold",
       yard_done:"{name} is now level {lv}!",
-      tab_sum:"Results", tab_fish:"Your catch",
+      tab_sum:"Results", tab_fish:"Your catch", tab_yard:"🛠 Shipyard",
+      up_can:"🛠 You can afford <b>{name}</b> → Lv {lv} ({n} coins)",
+      up_go:"Upgrade",
+      up_soon:"🛠 <b>{n}</b> more coins buys the next {name}",
+      up_maxed:"🛠 Everything is maxed — this boat is finished",
       fish_none:"Nothing came up this round — aim for a column with more fish.",
       fish_count:"×{n}",
       lock_title:"Locked", lock_sub:"Enter the password to keep fishing", lock_ph:"Password",
@@ -858,6 +895,10 @@
     achvHead: document.getElementById("achv-head"),
     overDex:  document.getElementById("over-dex"),
     overCoins: document.getElementById("over-coins"),
+    overUpsell: document.getElementById("over-upsell"),
+    overYardCoins: document.getElementById("over-yard-coins"),
+    overYardList: document.getElementById("over-yard-list"),
+    paneYard: document.getElementById("pane-yard"),
     shardPips: document.getElementById("shard-pips"),
     shardNote: document.getElementById("shard-note"),
     superBtn: document.getElementById("btn-super"),
@@ -1359,6 +1400,7 @@
     paintAchvLine();
     el.overCoins.textContent = lastCoins > 0
       ? t("coins_got", { n: lastCoins, total: boat.coins }) : "";
+    renderUpsell();
     renderFishPane();                           // 语言切换重画时也要跟着更新
   }
 
@@ -3493,6 +3535,7 @@
     paintAchvLine();
     el.overCoins.textContent = lastCoins > 0
       ? t("coins_got", { n: lastCoins, total: boat.coins }) : "";
+    renderUpsell();
     renderFishPane();
     el.overMiss.innerHTML = "";                   // 联机局不跑任务
     el.overDex.textContent = newSeen.length
@@ -3603,7 +3646,7 @@
     renderDex();                                   // 图鉴里的鱼名
     renderRanks(el.menuRank);                      // 排行榜表头
     renderShards();
-    if (el.yard.style.display !== "none") renderYard();
+    renderYardAll();                               // 切语言：两处造船厂和那条提示一起重画
     if (!el.over.classList.contains("hidden") && repaintResults) repaintResults();
   }
 
@@ -3934,9 +3977,13 @@
   }
   el.superBtn.addEventListener("click", e => { e.stopPropagation(); startSuper(); });
 
-  function renderYard() {
-    el.yardCoins.textContent = boat.coins;
-    el.yardList.innerHTML = "";
+  /* 造船厂现在有两个地方：开始画面和结算页的第三个标签。
+     同一个渲染函数往传进来的容器里画，买完两边一起刷 —— 不用维护两套。 */
+  function renderYard(listEl, coinsEl) {
+    listEl  = listEl  || el.yardList;
+    coinsEl = coinsEl || el.yardCoins;
+    coinsEl.textContent = boat.coins;
+    listEl.innerHTML = "";
     for (const u of UPGRADES) {
       const l = boat[u.id], maxed = l >= u.max, price = maxed ? 0 : u.cost(l);
       const row = document.createElement("div");
@@ -3971,7 +4018,43 @@
       }
 
       row.appendChild(ico); row.appendChild(body); row.appendChild(buy);
-      el.yardList.appendChild(row);
+      listEl.appendChild(row);
+    }
+  }
+
+  function renderYardAll() {                       // 两处都在的话一起刷
+    if (el.yard.style.display !== "none") renderYard(el.yardList, el.yardCoins);
+    if (!el.paneYard.classList.contains("hidden")) renderYard(el.overYardList, el.overYardCoins);
+    renderUpsell();
+  }
+
+  /* 结算页问一句「要不要升级」：
+     买得起就把最贵的那一档摆出来（钱多时提示更有分量），并给一个直接跳过去的按钮；
+     还差钱就说还差多少 —— 让人知道再打一局能换什么，而不是干看着金币数字。 */
+  function renderUpsell() {
+    const box = el.overUpsell;
+    box.innerHTML = "";
+    box.className = "upsell";
+    const open = UPGRADES.filter(u => boat[u.id] < u.max);
+    if (!open.length) { box.textContent = t("up_maxed").replace(/<\/?b>/g, ""); return; }
+
+    const afford = open.filter(u => boat.coins >= u.cost(boat[u.id]));
+    if (afford.length) {
+      const u = afford.reduce((a, b) => b.cost(boat[b.id]) > a.cost(boat[a.id]) ? b : a);
+      box.className = "upsell can";
+      const span = document.createElement("span");
+      span.innerHTML = t("up_can", { name: lang === "en" ? u.en : u.zh,
+                                     lv: boat[u.id] + 1, n: u.cost(boat[u.id]) });
+      const go = document.createElement("button");
+      go.textContent = t("up_go");
+      go.addEventListener("click", e => { e.stopPropagation(); showPane("yard"); });
+      box.appendChild(span); box.appendChild(go);
+    } else {
+      const u = open.reduce((a, b) => b.cost(boat[b.id]) < a.cost(boat[a.id]) ? b : a);
+      const span = document.createElement("span");
+      span.innerHTML = t("up_soon", { n: u.cost(boat[u.id]) - boat.coins,
+                                      name: lang === "en" ? u.en : u.zh });
+      box.appendChild(span);
     }
   }
 
@@ -3985,7 +4068,7 @@
     boat.coins -= price;
     boat[id] = l + 1;
     saveBoat();
-    renderYard();
+    renderYardAll();
     fanfare();
     pop(W / 2, SEA_Y + 150, t("yard_done", { name: lang === "en" ? u.en : u.zh, lv: boat[id] }),
         "#ffd24a", 21);
@@ -3995,15 +4078,17 @@
     e.stopPropagation();
     const open = el.yard.style.display === "none";
     el.yard.style.display = open ? "" : "none";
-    if (open) renderYard();
+    if (open) renderYard(el.yardList, el.yardCoins);
   });
 
   function showPane(which) {
     el.paneSum.classList.toggle("hidden", which !== "sum");
     el.paneFish.classList.toggle("hidden", which !== "fish");
+    el.paneYard.classList.toggle("hidden", which !== "yard");
     [...el.overTabs.querySelectorAll("button")].forEach(b =>
       b.classList.toggle("on", b.dataset.pane === which));
     if (which === "fish") renderFishPane();
+    if (which === "yard") renderYard(el.overYardList, el.overYardCoins);
   }
   el.overTabs.addEventListener("click", e => {
     e.stopPropagation();                        // 结算页点哪都会重开一局，标签页不能被算进去
